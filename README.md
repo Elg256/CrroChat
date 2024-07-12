@@ -4,4 +4,5 @@ You can send image and text from now. Work on both windows and linux.
 This app is not finished and have still some issus.
 
 
-![chat_3_msg](https://github.com/user-attachments/assets/d74f8c91-c630-42a6-b585-ace8c681611b)
+![image](https://github.com/user-attachments/assets/10438ace-d1f6-4f48-9dfd-74e3f2dbe8bf)
+

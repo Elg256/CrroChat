@@ -1,6 +1,6 @@
 # CrroChat
 A messaging app for sending fully encrypted messages using ecies with AES256 for encryption and ECDSA for signin both on the Secp256k1 curve (from the cryptcrro librairie).
-You can send image and text from now. 
+You can send image and text from now. Work on both windows and linux.
 This app is not finished and have still some issus.
 
 

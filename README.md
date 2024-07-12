@@ -3,6 +3,6 @@ A messaging app for sending fully encrypted messages using ecies with AES256 for
 You can send image and text from now. Work on both windows and linux.
 This app is not finished and have still some issus.
 
+![image](https://github.com/user-attachments/assets/3f77758a-1c78-4b9a-865d-4c8fc469ff50)
 
-![image](https://github.com/user-attachments/assets/10438ace-d1f6-4f48-9dfd-74e3f2dbe8bf)
 

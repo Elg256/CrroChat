@@ -1,29 +1,31 @@
-#import sys
-#from urllib.request import urlopen
+# import sys
+# from urllib.request import urlopen
 
 import requests
 import shutil
 
-#import codecs
+# import codecs
 
-from PyQt5.QtCore import QAbstractListModel, QMargins, QPoint, QSize, Qt, QRect, QThread, pyqtSignal
-from PyQt5.QtGui import QColor, QFontMetrics, QPen, QFont, QPixmap, QStandardItemModel, QStandardItem, QIcon, QBrush, \
-    QImage, QPalette
-#from PyQt5 import QtCore
+from PySide6.QtCore import QAbstractListModel, QMargins, QPoint, QSize, Qt, QRect, QThread, Signal
+from PySide6.QtGui import QColor, QFontMetrics, QPen, QFont, QPixmap, QStandardItemModel, QStandardItem, QIcon, QBrush, \
+    QImage, QPalette, QPolygon
+# from PySide6 import QtCore
 import os
-#import threading
-#import time  # pls delete this it is for debug
+# import threading
+# import time  # pls delete this it is for debug
 
-from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtCore import QByteArray, QBuffer, QIODevice, QSize, Qt
+from PySide6.QtGui import QImage, QPixmap ,QAction,QPainterPath
+from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QSize, Qt
 
-# from PyQt5.QtGui import
-from PyQt5.QtWidgets import (
+# from PySide6.QtGui import
+from PySide6.QtWidgets import (
     QFileDialog,
     QSpacerItem,
     QMessageBox,
     QAbstractItemView,
-    QAction,
+ 
+
+
     QApplication,
     QLineEdit,
     QListView,
@@ -39,17 +41,18 @@ import sys
 import time
 from datetime import datetime
 
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QPushButton, QLineEdit, QLabel, QSizePolicy, \
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QPushButton, QLineEdit, QLabel, QSizePolicy, \
     QDialog, QHBoxLayout
-from PyQt5.QtCore import QTimer
-from PyQt5.QtGui import QColor
+from PySide6.QtCore import QTimer
+from PySide6.QtGui import QColor
 
 from cryptcrro.asymetric import crro
 from cryptcrro.symetric import crro as scrro
 import re
 import hashlib
 import base64
-#import struct
+
+# import struct
 
 USER_ME = 0
 USER_THEM = 1
@@ -79,7 +82,7 @@ def reduce_image_quality(file_path, quality=80, max_image_size=QSize(200, 200)):
 
     # Scale the image if it's larger than the max size
     if image.width() > max_image_size.width() or image.height() > max_image_size.height():
-        image = image.scaled(max_image_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        image = image.scaled(max_image_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
     # Convert image to bytes with reduced quality
     compressed_bytes = QByteArray()
@@ -107,7 +110,7 @@ def bytes_to_pixmap(image_bytes):
     image.loadFromData(image_bytes)
     return QPixmap.fromImage(image)
 
-
+""""
 class CustomTextEdit(QTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -120,16 +123,16 @@ class CustomTextEdit(QTextEdit):
 
     def on_enter_pressed(self):
         text = self.toPlainText()
-        print(f"Enter key pressed! Text: {text}")
+        print(f"Enter key pressed! Text: {text}")"""
 
 
 class MessageDelegate(QStyledItemDelegate):
     """
-    Draws each message.
+    Dessine chaque message.
     """
 
     def paint(self, painter, option, index):
-        user, text, image = index.model().data(index, Qt.DisplayRole)
+        user, text, image = index.model().data(index, Qt.ItemDataRole.DisplayRole)
 
         if user == USER_ME:
             bubblerect = option.rect.marginsRemoved(BUBBLE_PADDING_ME)
@@ -138,55 +141,57 @@ class MessageDelegate(QStyledItemDelegate):
             bubblerect = option.rect.marginsRemoved(BUBBLE_PADDING_THEM)
             contentrect = option.rect.marginsRemoved(TEXT_PADDING_THEM)
 
-        # Draw the bubble outline
-        painter.setPen(QPen(QColor("#000000"), 2))
-        painter.drawRoundedRect(bubblerect, 10, 10)
+        # Dessinez le contour de la bulle
+        painter.setPen(QPen(QColor("#000000"), 1))
+        painter.drawRoundedRect(bubblerect, 11, 11)
 
-        # Draw the bubble
-        painter.setPen(Qt.NoPen)
-        color = QColor(BUBBLE_COLORS[user])
-        painter.setBrush(color)
-        painter.drawRoundedRect(bubblerect, 10, 10)
+        # Dessinez la bulle
+        painter.setBrush(QColor(BUBBLE_COLORS[user]))
+        painter.drawRoundedRect(bubblerect, 11, 11)
 
-        # Draw the triangle pointer
+        # Dessinez le pointeur du triangle
         if user == USER_ME:
             p1 = bubblerect.topRight()
         else:
             p1 = bubblerect.topLeft()
-        painter.drawPolygon(p1 + QPoint(-20, 0), p1 + QPoint(20, 0), p1 + QPoint(0, 20))
 
-        # Draw the text or image
-        painter.setPen(Qt.black)
+        polygon = QPolygon([
+            p1 + QPoint(-19, 0),
+            p1 + QPoint(19, 0),
+            p1 + QPoint(0, 19)
+        ])
+        painter.setPen(QPen(QColor(BUBBLE_COLORS[user]), 1))
+        painter.drawPolygon(polygon)
+
+        painter.setPen(QPen(QColor("#000000"), 2))
         if text:
-            # Increase the font size
-            font = painter.font()
-            font.setPointSize(10)  # Set the desired font size here
+            # Augmentez la taille de la police
+            font = QFont()
+            font.setPointSize(10)
             painter.setFont(font)
-
-            painter.drawText(contentrect, Qt.TextWordWrap, text)
+            painter.drawText(contentrect, Qt.TextFlag.TextWordWrap, text)
         elif image:
-            # Center the image in the bubble
+            # Centrez l'image dans la bulle
             img_rect = QRect(contentrect.left(), contentrect.top(), image.width(), image.height())
             img_rect.moveCenter(bubblerect.center())
             painter.drawPixmap(img_rect, image)
 
     def sizeHint(self, option, index):
-        user, text, image = index.model().data(index, Qt.DisplayRole)
+        user, text, image = index.model().data(index, Qt.ItemDataRole.DisplayRole)
         metrics = option.fontMetrics
 
         if text:
             font = option.font
-            font.setPointSize(10)  # Ensure we use the same font size as in paint()
+            font.setPointSize(10)
             metrics = QFontMetrics(font)
 
             text_width = option.rect.width() - TEXT_PADDING_ME.left() - TEXT_PADDING_ME.right()
-            text_height = metrics.boundingRect(QRect(0, 0, text_width, 0), Qt.TextWordWrap, text).height()
+            text_height = metrics.boundingRect(QRect(0, 0, text_width, 0), Qt.TextFlag.TextWordWrap, text).height()
             height = text_height + TEXT_PADDING_ME.top() + TEXT_PADDING_ME.bottom()
         elif image:
             height = image.height() + TEXT_PADDING_ME.top() + TEXT_PADDING_ME.bottom()
 
         return QSize(option.rect.width(), height)
-
 
 class MessageModel(QAbstractListModel):
     def __init__(self, main_window, *args, **kwargs):
@@ -195,7 +200,7 @@ class MessageModel(QAbstractListModel):
         self.main_window = main_window
 
     def data(self, index, role):
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
             return self.messages[index.row()]
 
     def rowCount(self, index):
@@ -207,20 +212,89 @@ class MessageModel(QAbstractListModel):
         self.endResetModel()
 
     def add_message(self, who, text=None, image_bytes=None, max_image_size=QSize(200, 200)):
-        """
-        Add a message to our message list, with text or image.
-        If an image is provided, it is resized to fit within max_image_size.
-        """
         if text and text.strip():
             self.messages.append((who, text, None))
         elif image_bytes:
             image = bytes_to_pixmap(image_bytes)
             if image.size().width() > max_image_size.width() or image.size().height() > max_image_size.height():
-                image = image.scaled(max_image_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                image = image.scaled(max_image_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             self.messages.append((who, None, image))
         self.layoutChanged.emit()
         bottom_index = self.createIndex(len(self.messages) - 1, 0)
         self.main_window.text_edit.scrollToBottom()
+
+
+
+class By_Elg256(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle('About Elg256')
+        self.setWindowIcon(QIcon("logo.png"))
+
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.MSWindowsFixedSizeDialogHint)
+
+        pixmap = QPixmap("./logo_crro.png")
+        scaled_pixmap = pixmap.scaled(150, 150, Qt.AspectRatioMode.KeepAspectRatio)
+
+        label_image = QLabel()
+        label_image.setPixmap(scaled_pixmap)
+
+        label_image.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        self.layout = QHBoxLayout(self)
+
+        self.label = QLabel("""
+                <p>This software is made by Elg256 and is part of the crro-software project.<br>
+                The crro-software project is all the cryptography related software from Elg256 learn more at: <a href="https://crro.neocities.org">https://crro.neocities.org</a></p></br>
+                <p>My OpenPGP public key hash is: 08E60E37D69E2787376B578762FB68E055D23FE9</p>
+                <p></p>
+                <p>For any issus or question you can use your github or email.<br>
+                Github: <a href="https://github.com/Elg256">https://github.com/Elg256</a></br>
+                <br>Email:elgremonter@gmail.com</p></br>
+
+                """)
+
+        self.label.setOpenExternalLinks(True)
+        self.layout.addWidget(label_image)
+        self.layout.addWidget(self.label)
+
+
+class About(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle('About CrroChat')
+        self.setWindowIcon(QIcon("logo.png"))
+
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.MSWindowsFixedSizeDialogHint)
+
+        pixmap = QPixmap("./logo.png")
+        scaled_pixmap = pixmap.scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio)
+
+        label_image = QLabel()
+        label_image.setPixmap(scaled_pixmap)
+
+        label_image.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        self.layout = QHBoxLayout(self)
+
+        self.label = QLabel("""
+                <p>CrroChat version v0.1.0</p>
+                <p>Copyright (C) 2023-2024 Elg256</p>
+                <p>Visit <a href="https://crro.neocities.org">https://crro.neocities.org</a> for further information about the software.</p>
+                <p>The source code is available from <a href="https://github.com/Elg256/CrroChat">https://github.com/Elg256/CrroChat</a>.</p>
+                <p>This is experimental software.<br>
+                Distributed under the MIT software license, see the accompanying file COPYING or <a href="https://opensource.org/licenses/MIT">https://opensource.org/licenses/MIT</a></p>
+                This product includes software developed by the crro-software Project by using 
+                <br>the cryptocrro librairie available at <a href="https://github.com/Elg256/Cryptcrro">https://github.com/Elg256/Cryptcrro</a>.</br>
+                </br><p>This program uses PySide version 6 under the LGPLv3 license.
+                <br>Please see <a href="https://qt.io/qt-licensing">qt.io/qt-licensing</a> for an overview of Qt licensing.</p>
+                """)
+
+        self.label.setOpenExternalLinks(True)
+        self.layout.addWidget(label_image)
+        self.layout.addWidget(self.label)
 
 
 class Bitcoin_donation(QDialog):
@@ -230,14 +304,25 @@ class Bitcoin_donation(QDialog):
         self.setWindowTitle('Bitcoin Donation')
         self.setWindowIcon(QIcon("logo.png"))
 
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.MSWindowsFixedSizeDialogHint)
+
         self.layout = QHBoxLayout(self)
         self.label = QLabel("Bitcoin address:")
         self.layout.addWidget(self.label)
-        btc_addr = "bc1q8j946v6gcnpumdjhdem2hhameh33fe4cy4xpqt"
-        self.field_addr = QLineEdit(btc_addr)
+        self.btc_addr = "bc1q8j946v6gcnpumdjhdem2hhameh33fe4cy4xpqt"
+        self.field_addr = QLineEdit(self.btc_addr)
         self.layout.addWidget(self.field_addr)
         self.field_addr.setReadOnly(True)
-        self.field_addr.setFixedWidth(self.field_addr.fontMetrics().boundingRect(btc_addr).width() + 20)
+        self.field_addr.setFixedWidth(self.field_addr.fontMetrics().boundingRect(self.btc_addr).width() + 20)
+
+        self.copy_button = QPushButton("Copy")
+        self.layout.addWidget(self.copy_button)
+        self.copy_button.clicked.connect(self.copy)
+
+    def copy(self):
+        clipboard = QApplication.clipboard()
+
+        clipboard.setText(self.btc_addr)
 
 
 class Get_Passord(QDialog):
@@ -266,14 +351,15 @@ class Get_Passord(QDialog):
 
         self.input_field = QLineEdit(self)
         self.input_field.setGeometry(25, 70, 200, 20)
-        self.input_field.setEchoMode(QLineEdit.Password)
+        self.input_field.setEchoMode(QLineEdit.EchoMode.Password)
 
         self.ok_button = QPushButton('Ok', self)
         self.ok_button.setGeometry(25, 100, 200, 30)
 
         self.ok_button.clicked.connect(self.take_user_input)
 
-    def take_user_input(self):
+    @try_except
+    def take_user_input(self, checked=False):
         print("before funct")
         user_input = self.input_field.text()
         print("before funct")
@@ -332,7 +418,7 @@ class Find_server(QDialog):
         self.layout.addLayout(self.server_layout3)
 
         self.label_1 = QLabel("Community server 1:")
-        self.field_server1 = QLineEdit("https://stfrancoisterminal.alwaysdata.net")
+        self.field_server1 = QLineEdit("")
         self.field_server1.setReadOnly(True)
         self.field_server1.setMinimumWidth(250)
         self.server_layout1.addWidget(self.label_1)
@@ -340,7 +426,7 @@ class Find_server(QDialog):
 
         self.button_copy1 = QPushButton("copy")
         self.server_layout1.addWidget(self.button_copy1)
-        self.button_copy1.clicked.connect(lambda :self.copy_server_link(link=1))
+        self.button_copy1.clicked.connect(lambda: self.copy_server_link(link=1))
 
         self.label_2 = QLabel("Community server 2:")
         self.field_server2 = QLineEdit()
@@ -361,7 +447,7 @@ class Find_server(QDialog):
         self.button_copy3 = QPushButton("copy")
         self.server_layout3.addWidget(self.button_copy3)
         self.button_copy3.clicked.connect(lambda: self.copy_server_link(link=3))
-        self.button_copy3.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        self.button_copy3.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
 
     def copy_server_link(self, link):
         if link == 1:
@@ -373,7 +459,6 @@ class Find_server(QDialog):
         clipboard = QApplication.clipboard()
 
         clipboard.setText(server)
-
 
 
 class Get_Contact(QDialog):
@@ -401,7 +486,6 @@ class Get_Contact(QDialog):
             self.label_nom.setFixedWidth(label_width)
             self.layout_name.addWidget(self.label_nom)
 
-
             self.champ_name = QLineEdit()
             # self.champ_nom.setStyleSheet("background-color: white;")
             self.layout_name.addWidget(self.champ_name)
@@ -414,7 +498,6 @@ class Get_Contact(QDialog):
             self.label_server = QLabel("<b>Server:</b>")
             self.label_server.setFixedWidth(label_width)
             self.layout_private_key.addWidget(self.label_server)
-
 
             self.server = QLineEdit()
             self.server.setMinimumWidth(200)
@@ -436,7 +519,6 @@ class Get_Contact(QDialog):
             self.label_public.setFixedWidth(label_width)
             self.layout_public_key.addWidget(self.label_public)
 
-
             self.public_key = QLineEdit()
             # self.champ_public_key.setStyleSheet("background-color: white;")
             self.layout_public_key.addWidget(self.public_key)
@@ -452,9 +534,9 @@ class Get_Contact(QDialog):
     def show_find_server_windows(self):
 
         find_server = Find_server(self)
-        find_server.exec_()
+        find_server.exec()
 
-    def take_user_input(self):
+    def take_user_input(self, checked=False):
         try:
             print("before funct")
             name = self.champ_name.text()
@@ -523,7 +605,7 @@ class Del_Contact(QDialog):
         except Exception as e:
             print("An error occurred:", e)
 
-    def take_user_input(self):
+    def take_user_input(self, checked=False):
         try:
             name = self.champ_name.text()
 
@@ -563,7 +645,7 @@ class Del_Contact(QDialog):
 
 
 class Downloader(QThread):
-    contentReady = pyqtSignal(bytes)
+    contentReady = Signal(bytes)
 
     def __init__(self, url):
         super().__init__()
@@ -571,6 +653,7 @@ class Downloader(QThread):
         self._content = None
         print("in init download Qthread")
 
+    @try_except
     def run(self):
         print("in run download Qthread")
 
@@ -582,7 +665,7 @@ class Downloader(QThread):
         # with urlopen(self._url) as r:
         # Read the content of the file.
         # content = r.read()
-        # Emit the content signal.
+        # Emit the content pyqtSignal.
         self.contentReady.emit(content)
 
 
@@ -593,7 +676,7 @@ class MainWindow(QMainWindow):
         oImage = QImage("background.png")
         sImage = oImage.scaled(QSize(1000, 800))  # resize Image to widgets size
         palette = QPalette()
-        palette.setBrush(QPalette.Window, QBrush(sImage))
+        palette.setBrush(QPalette.ColorRole.Window, QBrush(sImage))
         self.setPalette(palette)
 
         self.show_smiley = 2
@@ -624,7 +707,7 @@ class MainWindow(QMainWindow):
         center_layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
-        # center_layout.setAlignment(Qt.AlignCenter)
+        # center_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         center_layout.addLayout(self.layout)
 
         self.center_widget = QWidget()
@@ -645,7 +728,7 @@ class MainWindow(QMainWindow):
         central_widget.setLayout(central_layout)
         self.setCentralWidget(central_widget)
 
-        self.layout.setAlignment(Qt.AlignTop)
+        self.layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         bar = self.menuBar()
 
@@ -682,16 +765,18 @@ class MainWindow(QMainWindow):
         # Menu Edition
         edit_menu = bar.addMenu('About')
         version = QAction('Version 0.1', self)
-        creator = QAction('By Elg256', self)
+        creator = QAction(QIcon('./logo_crro.png'),'By Elg256', self)
         support_us = QAction(QIcon('./real_money.png'), "Support us", self)
         edit_menu.addAction(version)
         edit_menu.addAction(creator)
         edit_menu.addAction(support_us)
+        version.triggered.connect(self.show_about_windows)
+        creator.triggered.connect(self.show_elg256_windows)
         support_us.triggered.connect(self.show_donation_bitcoin_windows)
 
         self.h_layout = QHBoxLayout()
         self.h_layout.setContentsMargins(0, 0, 0, 0)
-        # self.h_layout.setAlignment(Qt.AlignCenter)
+        # self.h_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Chargement de l'image
         # logo_image = QPixmap("./logo_crro.png")
@@ -722,9 +807,51 @@ class MainWindow(QMainWindow):
 
         # Use our delegate to draw items in this view.
         self.text_edit.setItemDelegate(MessageDelegate())
-        self.text_edit.setStyleSheet("background-color: #eeeeee;"
-                                     )
-        self.text_edit.setItemAlignment(Qt.AlignCenter)
+        self.text_edit.setStyleSheet("""
+                    QListView {
+                        background-color: #eeeeee;
+                    }
+                    
+                    /* Barre de défilement verticale */
+                    QScrollBar:vertical {
+                        border: 0px solid #555555;
+                        background: #6DA2D2;
+                        width: 12px;
+                        
+                    }
+                    QScrollBar::handle:vertical {
+                        background: #6DA2D2;
+                        
+                    }
+                    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                        background: #555555;
+                        height: 5px;
+                        subcontrol-position: bottom;
+                        subcontrol-origin: margin;
+                            
+                    }
+                    
+                    /* Barre de défilement horizontale */
+                    QScrollBar:horizontal {
+                        border: 0px solid #555555;
+                        background: #6DA2D2;
+                        width: 12px;
+                        
+                    }
+                    QScrollBar::handle:horizontal {
+                        background: #6DA2D2;
+                        
+                    }
+                    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                        background: #555555;
+                        width: 10px;
+                        subcontrol-position: bottom;
+                        subcontrol-origin: margin;
+                            
+                    }
+                    
+                """)
+        self.text_edit.setItemAlignment(Qt.AlignmentFlag.AlignCenter)
         self.text_edit.setMaximumWidth(600)
         self.text_edit.setContentsMargins(0, 0, 0, 0)
 
@@ -770,7 +897,7 @@ class MainWindow(QMainWindow):
         button1.setMaximumSize(20, 20)
         button1.clicked.connect(
             lambda: self.insert_smiley("U+1F600"))
-        self.button_layout.addWidget(button1, alignment=Qt.AlignLeft)
+        self.button_layout.addWidget(button1, alignment=Qt.AlignmentFlag.AlignLeft)
 
         button2 = QPushButton()
         button2.setIcon(QIcon("emoji2.png"))
@@ -780,7 +907,7 @@ class MainWindow(QMainWindow):
         button2.clicked.connect(
             lambda: self.insert_smiley("U+1F604"))
 
-        self.button_layout.addWidget(button2, alignment=Qt.AlignLeft)
+        self.button_layout.addWidget(button2, alignment=Qt.AlignmentFlag.AlignLeft)
 
         button3 = QPushButton()
         button3.setStyleSheet(button_emoji_theme)
@@ -789,7 +916,7 @@ class MainWindow(QMainWindow):
             lambda: self.insert_smiley("U+1F602"))
         button3.setIconSize(QSize(20, 20))
         button3.setMaximumSize(20, 20)
-        self.button_layout.addWidget(button3, alignment=Qt.AlignLeft)
+        self.button_layout.addWidget(button3, alignment=Qt.AlignmentFlag.AlignLeft)
 
         button4 = QPushButton()
         button4.setStyleSheet(button_emoji_theme)
@@ -798,7 +925,7 @@ class MainWindow(QMainWindow):
         button4.setIcon(QIcon("emoji4.png"))
         button4.setIconSize(QSize(20, 20))
         button4.setMaximumSize(20, 20)
-        self.button_layout.addWidget(button4, alignment=Qt.AlignLeft)
+        self.button_layout.addWidget(button4, alignment=Qt.AlignmentFlag.AlignLeft)
 
         button5 = QPushButton()
         button5.setStyleSheet(button_emoji_theme)
@@ -807,7 +934,7 @@ class MainWindow(QMainWindow):
         button5.setIcon(QIcon("emoji5.png"))
         button5.setIconSize(QSize(20, 20))
         button5.setMaximumSize(20, 20)
-        self.button_layout.addWidget(button5, alignment=Qt.AlignLeft)
+        self.button_layout.addWidget(button5, alignment=Qt.AlignmentFlag.AlignLeft)
 
         button6 = QPushButton()
         button6.setStyleSheet(button_emoji_theme)
@@ -816,7 +943,7 @@ class MainWindow(QMainWindow):
         button6.setIcon(QIcon("emoji6.png"))
         button6.setIconSize(QSize(20, 20))
         button6.setMaximumSize(20, 20)
-        self.button_layout.addWidget(button6, alignment=Qt.AlignLeft)
+        self.button_layout.addWidget(button6, alignment=Qt.AlignmentFlag.AlignLeft)
 
         button7 = QPushButton()
         button7.setStyleSheet(button_emoji_theme)
@@ -825,7 +952,7 @@ class MainWindow(QMainWindow):
         button7.setIcon(QIcon("emoji7.png"))
         button7.setIconSize(QSize(20, 20))
         button7.setMaximumSize(20, 20)
-        self.button_layout.addWidget(button7, alignment=Qt.AlignLeft)
+        self.button_layout.addWidget(button7, alignment=Qt.AlignmentFlag.AlignLeft)
 
         button8 = QPushButton()
         button8.setStyleSheet(button_emoji_theme)
@@ -834,9 +961,9 @@ class MainWindow(QMainWindow):
         button8.setIcon(QIcon("emoji8.png"))
         button8.setIconSize(QSize(20, 20))
         button8.setMaximumSize(20, 20)
-        self.button_layout.addWidget(button8, alignment=Qt.AlignLeft)
+        self.button_layout.addWidget(button8, alignment=Qt.AlignmentFlag.AlignLeft)
 
-        spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        spacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         self.button_layout.addItem(spacer)
 
         button_file_img_theme = """
@@ -862,7 +989,7 @@ class MainWindow(QMainWindow):
         button_file.setIconSize(QSize(16, 16))
         button_file.setMaximumSize(20, 20)
         # button1.clicked.connect(self.button1_clicked)
-        self.button_layout.addWidget(button_file, alignment=Qt.AlignRight)
+        self.button_layout.addWidget(button_file, alignment=Qt.AlignmentFlag.AlignRight)
 
         button_img = QPushButton()
         button_img.setStyleSheet(button_file_img_theme)
@@ -871,7 +998,7 @@ class MainWindow(QMainWindow):
         button_img.setIconSize(QSize(20, 20))
         button_img.setMaximumSize(20, 20)
         button_img.clicked.connect(self.openFileNameDialog)
-        self.button_layout.addWidget(button_img, alignment=Qt.AlignRight)
+        self.button_layout.addWidget(button_img, alignment=Qt.AlignmentFlag.AlignRight)
 
         self.widget_button.hide()
 
@@ -907,7 +1034,7 @@ class MainWindow(QMainWindow):
         self.widget_send_button_and_champ_message = QWidget()
         self.widget_send_button_and_champ_message.setStyleSheet("background-color: white;")
         self.layout_send_button_and_champ_message.addWidget(self.widget_send_button_and_champ_message,
-                                                            alignment=Qt.AlignLeft)
+                                                            alignment=Qt.AlignmentFlag.AlignLeft)
 
         # self.space_for_send_button = QSpacerItem(QSizePolicy.Expanding, QSizePolicy.Minimum)
         # self.space_for_send_button.setStyleSheet("background-color: white;")
@@ -933,7 +1060,7 @@ class MainWindow(QMainWindow):
         self.button_smiley.setContentsMargins(0, 0, 0, 0)
         self.button_smiley.clicked.connect(self.show_smiley_funct)
         self.button_smiley.setFixedSize(20, 20)
-        # self.layout_plus_button.addWidget(self.button_smiley, alignment=Qt.AlignRight)
+        # self.layout_plus_button.addWidget(self.button_smiley, alignment=Qt.AlignmentFlag.AlignRight)
 
         self.layout.addLayout(self.layout_send_button_and_champ_message)
 
@@ -944,7 +1071,7 @@ class MainWindow(QMainWindow):
         self.widget_send_button_and_champ_message.setContentsMargins(0, 0, 0, 0)
         self.widget_send_button_and_champ_message.setLayout(self.layout_for_plus_and_send_button)
 
-        self.layout_for_plus_and_send_button.addWidget(self.button_smiley, alignment=Qt.AlignLeft)
+        self.layout_for_plus_and_send_button.addWidget(self.button_smiley, alignment=Qt.AlignmentFlag.AlignLeft)
 
         # self.send_button = QPushButton(" Send")
         self.send_button = QPushButton()
@@ -972,10 +1099,10 @@ class MainWindow(QMainWindow):
         # self.send_button.setMaximumWidth(100)
         # self.send_button.setMinimumHeight(30)
 
-        # self.widget_send_button_and_champ_message.addWidget(self.send_button, alignment=Qt.AlignLeft)
+        # self.widget_send_button_and_champ_message.addWidget(self.send_button, alignment=Qt.AlignmentFlag.AlignLeft)
         # self.layout_send_button_and_champ_message.addItem(self.space_for_send_button)
 
-        self.layout_for_plus_and_send_button.addWidget(self.send_button, alignment=Qt.AlignLeft)
+        self.layout_for_plus_and_send_button.addWidget(self.send_button, alignment=Qt.AlignmentFlag.AlignLeft)
 
         self.start_contenu = ""
         self.timer = QTimer()
@@ -1008,7 +1135,7 @@ class MainWindow(QMainWindow):
         model = QStandardItemModel()
         self.list_contacts.setModel(model)
 
-        self.list_contacts.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.list_contacts.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 
         self.list_contacts.doubleClicked.connect(self.fill_info_contact)
 
@@ -1101,7 +1228,7 @@ class MainWindow(QMainWindow):
 
         self.champ_private_key = QLineEdit()
         self.champ_private_key.setStyleSheet("background-color: white;")
-        self.champ_private_key.setEchoMode(QLineEdit.Password)
+        self.champ_private_key.setEchoMode(QLineEdit.EchoMode.Password)
         self.see = True
         self.layout_private_key.addWidget(self.champ_private_key)
 
@@ -1109,12 +1236,13 @@ class MainWindow(QMainWindow):
 
         self.see_private_key = QPushButton()
         self.see_private_key.setIcon(icon_eye)
-        self.see_private_key.setToolTip("Show/hide Private key\nthis is the key you keep secret, it is for you and only you")
-        self.see_private_key.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        self.see_private_key.setToolTip(
+            "Show/hide Private key\nthis is the key you keep secret, it is for you and only you")
+        self.see_private_key.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
 
         self.see_private_key.setStyleSheet(theme_blue_button)
         self.see_private_key.clicked.connect(self.see_private)
-        self.layout_private_key.addWidget(self.see_private_key, alignment=Qt.AlignCenter)
+        self.layout_private_key.addWidget(self.see_private_key, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Layout pour la clé publique
         self.layout_public_key = QHBoxLayout()
@@ -1140,27 +1268,27 @@ class MainWindow(QMainWindow):
         # self.layout_manage_button.setContentsMargins(10, 10, 10, 10)
 
         self.generate_key_button = QPushButton("generate a new key pair")
-        self.generate_key_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        self.generate_key_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
         self.generate_key_button.setStyleSheet(theme_blue_button)
         self.generate_key_button.setToolTip("This is basically deleting your account and recreate an other")
 
         self.generate_key_button.clicked.connect(self.generate_keys)
-        self.generate_key_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
-        self.layout_manage_button.addWidget(self.generate_key_button, alignment=Qt.AlignCenter)
+        self.generate_key_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+        self.layout_manage_button.addWidget(self.generate_key_button, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # self.save_key_button = QPushButton("Save keys")
         # self.save_key_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         # self.save_key_button.setStyleSheet(theme_blue_button)
 
         # self.save_key_button.clicked.connect(self.show_password_windows_save)
-        # self.layout_manage_button.addWidget(self.save_key_button, alignment=Qt.AlignCenter)
+        # self.layout_manage_button.addWidget(self.save_key_button, alignment=Qt.AlignmentFlag.AlignCenter)
 
         """
         self.get_key_button = QPushButton("Acess keys")
         self.get_key_button.setStyleSheet(theme_blue_button)
 
         self.get_key_button.clicked.connect(self.show_password_windows_access)
-        self.layout_manage_button.addWidget(self.get_key_button, alignment=Qt.AlignCenter)
+        self.layout_manage_button.addWidget(self.get_key_button, alignment=Qt.AlignmentFlag.AlignCenter)
         """
 
         self.url_send = ''
@@ -1304,16 +1432,28 @@ class MainWindow(QMainWindow):
         # print(smiley, "U+1F600".decode())
         self.champ_message.insertPlainText(emoji)
 
+    @try_except
     def show_smiley_funct(self):
-        try:
-            if self.show_smiley == 1:
-                self.widget_button.hide()
-                self.show_smiley = 2
-            else:
-                self.widget_button.show()
-                self.show_smiley = 1
-        except Exception as e:
-            print(e)
+
+        if self.show_smiley == 1:
+            self.widget_button.hide()
+            self.show_smiley = 2
+        else:
+            self.widget_button.show()
+            self.show_smiley = 1
+        with open("./parameters.txt", "r") as file:
+            data = file.read()
+
+        lines = data.split("\n")
+        for line in lines:
+            if line.startswith("show_emoji_at:"):
+                print("find lines")
+
+                new_data = data.replace(line, "show_emoji_at:" + str(self.show_smiley))
+
+                with open("./parameters.txt", "w") as file:
+                    file.write(new_data)
+
 
     @try_except
     def initDownload(self, url_path):
@@ -1351,6 +1491,7 @@ class MainWindow(QMainWindow):
 
         return self.content
 
+    @try_except
     def refresh_contact_list(self):
         with open("contacts.txt", "r") as file:
             data = file.read()
@@ -1381,10 +1522,10 @@ class MainWindow(QMainWindow):
 
         if self.see == True:
             self.see = False
-            self.champ_private_key.setEchoMode(QLineEdit.Normal)
+            self.champ_private_key.setEchoMode(QLineEdit.EchoMode.Normal)
         else:
             self.see = True
-            self.champ_private_key.setEchoMode(QLineEdit.Password)
+            self.champ_private_key.setEchoMode(QLineEdit.EchoMode.Password)
 
     @try_except
     def fill_info_contact(self, index, start=False):
@@ -1414,7 +1555,7 @@ class MainWindow(QMainWindow):
                 self.model.clear()
 
                 with open("parameters.txt", "w") as file:
-                    file.write(name + ";" + server_contact + ";" + public_key + ";")
+                    file.write(name + ";" + server_contact + ";" + public_key + ";"+"\nshow_emoji_at:" + str(self.show_smiley))
         else:
             # if 2 == 1:
             with open("parameters.txt", "r") as file:
@@ -1440,7 +1581,7 @@ class MainWindow(QMainWindow):
             # self.get_contenu(start=True)
             # self.show_chat()
 
-    @try_except
+    """
     def closeEvent(self, event):
         with open("./parameters.txt", "r") as file:
             data = file.read()
@@ -1454,10 +1595,10 @@ class MainWindow(QMainWindow):
 
                 with open("./parameters.txt", "w") as file:
                     file.write(new_data)
-        print("The close is clean")
+        print("The close is clean")"""
 
     @try_except
-    def send_message(self, another):
+    def send_message(self, another=None):
 
         try:
 
@@ -1477,7 +1618,7 @@ class MainWindow(QMainWindow):
         public_key_sender = str(self.champ_public_key2.text())
 
         private_key = self.champ_private_key.text()
-        private_key_int = int.from_bytes(base64.urlsafe_b64decode(private_key))
+        private_key_int = int.from_bytes(base64.urlsafe_b64decode(private_key), byteorder='big')
 
         identifier = hashlib.sha256(public_key.encode()).hexdigest()
 
@@ -2024,32 +2165,40 @@ class MainWindow(QMainWindow):
 
         self.save_keys(password)
 
-    def show_donation_bitcoin_windows(self):
+    def show_elg256_windows(self,action=None):
+        elg256 = By_Elg256(self)
+        elg256.exec()
+
+    def show_about_windows(self,action=None):
+        about = About(self)
+        about.exec()
+    @try_except
+    def show_donation_bitcoin_windows(self,action=None):
         bitcoin = Bitcoin_donation(self)
-        bitcoin.exec_()
+        bitcoin.exec()
 
     def show_fisrt_time_password_windows(self, start):
         for_what = "first_time"
         get_password = Get_Passord(self, for_what, start=False)
-        get_password.exec_()
+        get_password.exec()
 
     def show_password_windows_access(self, start):
         for_what = "access"
         get_password = Get_Passord(self, for_what, start=True)
-        get_password.exec_()
+        get_password.exec()
 
     def show_contact_windows(self, start):
         get_contact = Get_Contact(self)
-        get_contact.exec_()
+        get_contact.exec()
 
     def show_delete_contact_windows(self, start):
         del_contact = Del_Contact(self)
-        del_contact.exec_()
+        del_contact.exec()
 
-    def show_password_windows_save(self):
+    def show_password_windows_save(self,action=None):
         for_what = "save"
         get_password = Get_Passord(self, for_what)
-        get_password.exec_()
+        get_password.exec()
 
     def get_contenu_in_thread(self):
         self.fill_server_info()
@@ -2119,7 +2268,8 @@ class MainWindow(QMainWindow):
 
                 print("starr False", start)
 
-    def generate_keys(self):
+    @try_except
+    def generate_keys(self,action=None):
 
         yes_or_no = QMessageBox.question(self,
                                          'Confirmation',
@@ -2143,7 +2293,8 @@ class MainWindow(QMainWindow):
         else:
             return
 
-    def generate_keys_first_time(self):
+    @try_except
+    def generate_keys_first_time(self, action=None):
 
         self.private_key = crro.generate_private_key()
 
@@ -2154,8 +2305,8 @@ class MainWindow(QMainWindow):
         self.champ_private_key.setText(base64.urlsafe_b64encode(self.private_key).decode())
         self.champ_public_key.setText(str(self.public_key))
 
-
-    def show_chat(self):
+    @try_except
+    def show_chat(self, action=None):
 
         self.text_edit.show()
         self.champ_message.show()
@@ -2165,7 +2316,7 @@ class MainWindow(QMainWindow):
 
         if self.show_smiley == 1:
             self.widget_button.show()
-        #self.show_smiley = 2
+        # self.show_smiley = 2
 
         self.champ_private_key.hide()
         self.champ_public_key.hide()
@@ -2312,4 +2463,4 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

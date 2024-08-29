@@ -1,17 +1,18 @@
-import sys
-from urllib.request import urlopen
+#import sys
+#from urllib.request import urlopen
 
 import requests
+import shutil
 
-import codecs
+#import codecs
 
 from PyQt5.QtCore import QAbstractListModel, QMargins, QPoint, QSize, Qt, QRect, QThread, pyqtSignal
 from PyQt5.QtGui import QColor, QFontMetrics, QPen, QFont, QPixmap, QStandardItemModel, QStandardItem, QIcon, QBrush, \
     QImage, QPalette
-from PyQt5 import QtCore
+#from PyQt5 import QtCore
 import os
-import threading
-import time  # pls delete this it is for debug
+#import threading
+#import time  # pls delete this it is for debug
 
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import QByteArray, QBuffer, QIODevice, QSize, Qt
@@ -48,7 +49,7 @@ from cryptcrro.symetric import crro as scrro
 import re
 import hashlib
 import base64
-import struct
+#import struct
 
 USER_ME = 0
 USER_THEM = 1
@@ -89,6 +90,7 @@ def reduce_image_quality(file_path, quality=80, max_image_size=QSize(200, 200)):
 
     return compressed_bytes
 
+
 def try_except(func):
     def wrapper(*args, **kwargs):
         try:
@@ -98,6 +100,7 @@ def try_except(func):
             # Vous pouvez également gérer l'exception ici ou laisser le code gérant l'exception en aval.
 
     return wrapper
+
 
 def bytes_to_pixmap(image_bytes):
     image = QImage()
@@ -155,6 +158,11 @@ class MessageDelegate(QStyledItemDelegate):
         # Draw the text or image
         painter.setPen(Qt.black)
         if text:
+            # Increase the font size
+            font = painter.font()
+            font.setPointSize(10)  # Set the desired font size here
+            painter.setFont(font)
+
             painter.drawText(contentrect, Qt.TextWordWrap, text)
         elif image:
             # Center the image in the bubble
@@ -167,6 +175,10 @@ class MessageDelegate(QStyledItemDelegate):
         metrics = option.fontMetrics
 
         if text:
+            font = option.font
+            font.setPointSize(10)  # Ensure we use the same font size as in paint()
+            metrics = QFontMetrics(font)
+
             text_width = option.rect.width() - TEXT_PADDING_ME.left() - TEXT_PADDING_ME.right()
             text_height = metrics.boundingRect(QRect(0, 0, text_width, 0), Qt.TextWordWrap, text).height()
             height = text_height + TEXT_PADDING_ME.top() + TEXT_PADDING_ME.bottom()
@@ -209,6 +221,23 @@ class MessageModel(QAbstractListModel):
         self.layoutChanged.emit()
         bottom_index = self.createIndex(len(self.messages) - 1, 0)
         self.main_window.text_edit.scrollToBottom()
+
+
+class Bitcoin_donation(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle('Bitcoin Donation')
+        self.setWindowIcon(QIcon("logo.png"))
+
+        self.layout = QHBoxLayout(self)
+        self.label = QLabel("Bitcoin address:")
+        self.layout.addWidget(self.label)
+        btc_addr = "bc1q8j946v6gcnpumdjhdem2hhameh33fe4cy4xpqt"
+        self.field_addr = QLineEdit(btc_addr)
+        self.layout.addWidget(self.field_addr)
+        self.field_addr.setReadOnly(True)
+        self.field_addr.setFixedWidth(self.field_addr.fontMetrics().boundingRect(btc_addr).width() + 20)
 
 
 class Get_Passord(QDialog):
@@ -279,6 +308,74 @@ class Get_Passord(QDialog):
         self.accept()
 
 
+@try_except
+class Find_server(QDialog):
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle('Find a server')
+        self.setWindowIcon(QIcon("logo.png"))
+        self.layout = QVBoxLayout(self)
+
+        self.text_label = QLabel("You can use your own http server or use a community server.\n"
+                                 "you don't need to trust the server for your messages to being secure.\n"
+                                 "but a non-trusted server can be down when you don't want it to be.")
+        self.layout.addWidget(self.text_label)
+
+        self.server_layout1 = QHBoxLayout()
+        self.layout.addLayout(self.server_layout1)
+
+        self.server_layout2 = QHBoxLayout()
+        self.layout.addLayout(self.server_layout2)
+
+        self.server_layout3 = QHBoxLayout()
+        self.layout.addLayout(self.server_layout3)
+
+        self.label_1 = QLabel("Community server 1:")
+        self.field_server1 = QLineEdit("https://stfrancoisterminal.alwaysdata.net")
+        self.field_server1.setReadOnly(True)
+        self.field_server1.setMinimumWidth(250)
+        self.server_layout1.addWidget(self.label_1)
+        self.server_layout1.addWidget(self.field_server1)
+
+        self.button_copy1 = QPushButton("copy")
+        self.server_layout1.addWidget(self.button_copy1)
+        self.button_copy1.clicked.connect(lambda :self.copy_server_link(link=1))
+
+        self.label_2 = QLabel("Community server 2:")
+        self.field_server2 = QLineEdit()
+        self.field_server2.setReadOnly(True)
+        self.server_layout2.addWidget(self.label_2)
+        self.server_layout2.addWidget(self.field_server2)
+
+        self.button_copy2 = QPushButton("copy")
+        self.server_layout2.addWidget(self.button_copy2)
+        self.button_copy2.clicked.connect(lambda: self.copy_server_link(link=2))
+
+        self.label_3 = QLabel("Community server 3:")
+        self.field_server3 = QLineEdit()
+        self.field_server3.setReadOnly(True)
+        self.server_layout3.addWidget(self.label_3)
+        self.server_layout3.addWidget(self.field_server3)
+
+        self.button_copy3 = QPushButton("copy")
+        self.server_layout3.addWidget(self.button_copy3)
+        self.button_copy3.clicked.connect(lambda: self.copy_server_link(link=3))
+        self.button_copy3.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+
+    def copy_server_link(self, link):
+        if link == 1:
+            server = self.field_server1.text()
+        elif link == 2:
+            server = self.field_server2.text()
+        elif link == 3:
+            server = self.field_server3.text()
+        clipboard = QApplication.clipboard()
+
+        clipboard.setText(server)
+
+
+
 class Get_Contact(QDialog):
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
@@ -289,32 +386,73 @@ class Get_Contact(QDialog):
             self.main_window = main_window  # Référence à l'instance de MainWindow
             self.setWindowTitle('Add contact')
 
-            self.label_name = QLabel("Name:", self)
-            self.label_name.setGeometry(10, 50, 110, 20)
+            # Créer le layout principal vertical
+            self.layout = QVBoxLayout(self)
 
-            self.champ_name = QLineEdit(self)
+            # Largeur fixe pour les labels
+            label_width = 80
 
-            self.champ_name.setGeometry(25, 70, 200, 20)
+            # Layout pour le nom
+            self.layout_name = QHBoxLayout()
+            self.layout.addLayout(self.layout_name)
+            self.layout_name.setContentsMargins(3, 3, 3, 3)
 
-            self.label_server = QLabel("Server:", self)
-            self.label_server.setGeometry(10, 100, 110, 20)
+            self.label_nom = QLabel("<b>Name:</b>")
+            self.label_nom.setFixedWidth(label_width)
+            self.layout_name.addWidget(self.label_nom)
 
-            self.server = QLineEdit(self)
-            self.server.setGeometry(25, 120, 300, 20)
 
-            self.label_public_key = QLabel("Public key:", self)
-            self.label_public_key.setGeometry(10, 140, 110, 20)
+            self.champ_name = QLineEdit()
+            # self.champ_nom.setStyleSheet("background-color: white;")
+            self.layout_name.addWidget(self.champ_name)
+            self.champ_name.setPlaceholderText("Name for the contact list, choosen by you")
 
-            self.public_key = QLineEdit(self)
-            self.public_key.setGeometry(25, 170, 300, 20)
+            self.layout_private_key = QHBoxLayout()
+            self.layout.addLayout(self.layout_private_key)
+            self.layout_private_key.setContentsMargins(3, 3, 3, 3)
+
+            self.label_server = QLabel("<b>Server:</b>")
+            self.label_server.setFixedWidth(label_width)
+            self.layout_private_key.addWidget(self.label_server)
+
+
+            self.server = QLineEdit()
+            self.server.setMinimumWidth(200)
+            # self.champ_private_key.setStyleSheet("background-color: white;")
+            self.layout_private_key.addWidget(self.server)
+            self.server.setPlaceholderText("The server you will discuss on")
+
+            self.button_find_server = QPushButton("Find a server")
+            self.layout_private_key.addWidget(self.button_find_server)
+            self.button_find_server.clicked.connect(self.show_find_server_windows)
+            self.button_find_server.setToolTip("Tips for choosing your server")
+
+            # Layout pour la clé publique
+            self.layout_public_key = QHBoxLayout()
+            self.layout.addLayout(self.layout_public_key)
+            self.layout_public_key.setContentsMargins(3, 3, 3, 3)
+
+            self.label_public = QLabel("<b>Public key: </b>")
+            self.label_public.setFixedWidth(label_width)
+            self.layout_public_key.addWidget(self.label_public)
+
+
+            self.public_key = QLineEdit()
+            # self.champ_public_key.setStyleSheet("background-color: white;")
+            self.layout_public_key.addWidget(self.public_key)
+            self.public_key.setPlaceholderText("Enter the key your correspondent gave you")
 
             self.ok_button = QPushButton('Add contact', self)
-            self.ok_button.setGeometry(25, 200, 200, 30)
-
+            self.layout.addWidget(self.ok_button)
             self.ok_button.clicked.connect(self.take_user_input)
 
         except Exception as e:
-            print(e)
+            print("An error occurred:", e)
+
+    def show_find_server_windows(self):
+
+        find_server = Find_server(self)
+        find_server.exec_()
 
     def take_user_input(self):
         try:
@@ -335,6 +473,90 @@ class Get_Contact(QDialog):
 
             # except Exception as e:
             # print(e)
+            self.accept()
+        except Exception as e:
+            print(e)
+
+
+class Del_Contact(QDialog):
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+
+        try:
+            self.setWindowIcon(QIcon("logo.png"))
+
+            self.main_window = main_window  # Référence à l'instance de MainWindow
+            self.setWindowTitle('Delete a contact')
+
+            # Créer le layout principal vertical
+            self.layout = QVBoxLayout(self)
+
+            # Largeur fixe pour les labels
+            label_width = 80
+
+            # Layout pour le serveur (anciennement clé privée)
+            self.layout_private_key = QHBoxLayout()
+            self.layout.addLayout(self.layout_private_key)
+            self.layout_private_key.setContentsMargins(3, 3, 3, 3)
+
+            self.label_server = QLabel("Write the exact name of the contact you want to delete")
+            self.layout_private_key.addWidget(self.label_server)
+
+            # Layout pour le nom
+            self.layout_name = QHBoxLayout()
+            self.layout.addLayout(self.layout_name)
+            self.layout_name.setContentsMargins(3, 3, 3, 3)
+
+            self.label_nom = QLabel("<b>Name:</b>")
+            self.label_nom.setFixedWidth(label_width)
+            self.layout_name.addWidget(self.label_nom)
+
+            self.champ_name = QLineEdit()
+            # self.champ_nom.setStyleSheet("background-color: white;")
+            self.layout_name.addWidget(self.champ_name)
+
+            self.ok_button = QPushButton('Delete contact', self)
+            self.layout.addWidget(self.ok_button)
+            self.ok_button.clicked.connect(self.take_user_input)
+
+
+        except Exception as e:
+            print("An error occurred:", e)
+
+    def take_user_input(self):
+        try:
+            name = self.champ_name.text()
+
+            with open("./contacts.txt", "r") as file:
+                data = file.read()
+
+            data = data.split(";")
+
+            index_to_remove = None
+            for i, line in enumerate(data):
+                if line.startswith(f"{name}"):
+                    index_to_remove = i
+                    break
+
+            if index_to_remove is not None:
+                del data[
+                    index_to_remove:index_to_remove + 3]
+
+            with open("./contacts.txt", "w") as file:
+                file.write(";".join(data))
+
+            try:
+                shutil.rmtree(f"./chat_data/{name}")
+                print(f"Dossier './chat_data/{name}' et tout son contenu ont été supprimés avec succès.")
+            except FileNotFoundError:
+                print(f"Le dossier './chat_data/{name}' n'existe pas.")
+            except PermissionError:
+                print(f"Permission refusée pour supprimer le dossier './chat_data/{name}'.")
+            except OSError as e:
+                print(f"Erreur : {e}")
+
+            self.main_window.refresh_contact_list()
+
             self.accept()
         except Exception as e:
             print(e)
@@ -368,7 +590,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        oImage = QImage("img_8.png")
+        oImage = QImage("background.png")
         sImage = oImage.scaled(QSize(1000, 800))  # resize Image to widgets size
         palette = QPalette()
         palette.setBrush(QPalette.Window, QBrush(sImage))
@@ -406,8 +628,8 @@ class MainWindow(QMainWindow):
         center_layout.addLayout(self.layout)
 
         self.center_widget = QWidget()
-        self.center_widget.setStyleSheet("background-color:#6da2d2;"
-                                         )
+        self.center_widget.setStyleSheet("background-color:#6da2d2;")
+
         self.center_widget.setContentsMargins(0, 0, 0, 0)
         self.center_widget.setContentsMargins(0, 0, 0, 5)
         self.center_widget.setMaximumWidth(600)
@@ -447,9 +669,9 @@ class MainWindow(QMainWindow):
         bar.addAction(contact_action)
         contact_action.triggered.connect(self.show_contacts)
 
-        server_action = QAction('Server', self)
-        bar.addAction(server_action)
-        server_action.triggered.connect(self.show_server)
+        # server_action = QAction('Server', self)
+        # bar.addAction(server_action)
+        # server_action.triggered.connect(self.show_server)
 
         key_action = QAction("Keys", self)
         bar.addAction(key_action)
@@ -461,8 +683,11 @@ class MainWindow(QMainWindow):
         edit_menu = bar.addMenu('About')
         version = QAction('Version 0.1', self)
         creator = QAction('By Elg256', self)
+        support_us = QAction(QIcon('./real_money.png'), "Support us", self)
         edit_menu.addAction(version)
         edit_menu.addAction(creator)
+        edit_menu.addAction(support_us)
+        support_us.triggered.connect(self.show_donation_bitcoin_windows)
 
         self.h_layout = QHBoxLayout()
         self.h_layout.setContentsMargins(0, 0, 0, 0)
@@ -497,7 +722,8 @@ class MainWindow(QMainWindow):
 
         # Use our delegate to draw items in this view.
         self.text_edit.setItemDelegate(MessageDelegate())
-        self.text_edit.setStyleSheet("background-color: #eeeeee;")
+        self.text_edit.setStyleSheet("background-color: #eeeeee;"
+                                     )
         self.text_edit.setItemAlignment(Qt.AlignCenter)
         self.text_edit.setMaximumWidth(600)
         self.text_edit.setContentsMargins(0, 0, 0, 0)
@@ -513,72 +739,139 @@ class MainWindow(QMainWindow):
         self.widget_button.setContentsMargins(0, 0, 0, 0)
 
         # Définissez la couleur de fond du widget en utilisant un code hexadécimal
-        self.widget_button.setStyleSheet("background-color: #b9d7d3;") #c4dcd9
+        self.widget_button.setStyleSheet("background-color: #9fc5e8;")  # c4dcd9
 
         # Ajoutez le widget parent au layout principal
         self.layout.addWidget(self.widget_button)
 
+        button_emoji_theme = """
+                    QPushButton {
+
+                        border: none; 
+                        border-radius: 4;
+
+                        font-size: 22px;
+                    }
+                    QPushButton:pressed {
+                        background-color: #6a6a6a; 
+                    }
+                    QPushButton:hover {
+                        background-color: #6a6a6a; 
+                    }
+                """
+
         # Bouton 1
         button1 = QPushButton()
-        icon = QIcon("logo.png")
+        icon = QIcon("emoji1.png")
         button1.setIcon(icon)
 
-        button1.setStyleSheet("border: none;"
-                              "background-color: white;")
+        button1.setStyleSheet(button_emoji_theme)
         button1.setIconSize(QSize(20, 20))
         button1.setMaximumSize(20, 20)
         button1.clicked.connect(
-            lambda: self.insert_smiley("U+1F600"))  # Connectez-le à une fonction de gestion d'événements
+            lambda: self.insert_smiley("U+1F600"))
         self.button_layout.addWidget(button1, alignment=Qt.AlignLeft)
 
         button2 = QPushButton()
-        button2.setIcon(QIcon("logo.png"))
+        button2.setIcon(QIcon("emoji2.png"))
         button2.setIconSize(QSize(20, 20))
         button2.setMaximumSize(20, 20)
-        button2.setStyleSheet("border: none;"
-                              "background-color: white;")
-        # button1.clicked.connect()  # Connectez-le à une fonction de gestion d'événements
+        button2.setStyleSheet(button_emoji_theme)
+        button2.clicked.connect(
+            lambda: self.insert_smiley("U+1F604"))
 
         self.button_layout.addWidget(button2, alignment=Qt.AlignLeft)
 
         button3 = QPushButton()
-        button3.setIcon(QIcon("logo.png"))
+        button3.setStyleSheet(button_emoji_theme)
+        button3.setIcon(QIcon("emoji3.png"))
+        button3.clicked.connect(
+            lambda: self.insert_smiley("U+1F602"))
         button3.setIconSize(QSize(20, 20))
         button3.setMaximumSize(20, 20)
-        # button1.clicked.connect(self.button1_clicked)  # Connectez-le à une fonction de gestion d'événements
         self.button_layout.addWidget(button3, alignment=Qt.AlignLeft)
 
         button4 = QPushButton()
-        button4.setIcon(QIcon("logo.png"))
+        button4.setStyleSheet(button_emoji_theme)
+        button4.clicked.connect(
+            lambda: self.insert_smiley("U+1F605"))
+        button4.setIcon(QIcon("emoji4.png"))
         button4.setIconSize(QSize(20, 20))
         button4.setMaximumSize(20, 20)
-        # button1.clicked.connect(self.button1_clicked)  # Connectez-le à une fonction de gestion d'événements
         self.button_layout.addWidget(button4, alignment=Qt.AlignLeft)
 
+        button5 = QPushButton()
+        button5.setStyleSheet(button_emoji_theme)
+        button5.clicked.connect(
+            lambda: self.insert_smiley("U+1F60D"))
+        button5.setIcon(QIcon("emoji5.png"))
+        button5.setIconSize(QSize(20, 20))
+        button5.setMaximumSize(20, 20)
+        self.button_layout.addWidget(button5, alignment=Qt.AlignLeft)
 
+        button6 = QPushButton()
+        button6.setStyleSheet(button_emoji_theme)
+        button6.clicked.connect(
+            lambda: self.insert_smiley("U+1F618 "))
+        button6.setIcon(QIcon("emoji6.png"))
+        button6.setIconSize(QSize(20, 20))
+        button6.setMaximumSize(20, 20)
+        self.button_layout.addWidget(button6, alignment=Qt.AlignLeft)
+
+        button7 = QPushButton()
+        button7.setStyleSheet(button_emoji_theme)
+        button7.clicked.connect(
+            lambda: self.insert_smiley("U+1F610"))
+        button7.setIcon(QIcon("emoji7.png"))
+        button7.setIconSize(QSize(20, 20))
+        button7.setMaximumSize(20, 20)
+        self.button_layout.addWidget(button7, alignment=Qt.AlignLeft)
+
+        button8 = QPushButton()
+        button8.setStyleSheet(button_emoji_theme)
+        button8.clicked.connect(
+            lambda: self.insert_smiley("U+1F60E	"))
+        button8.setIcon(QIcon("emoji8.png"))
+        button8.setIconSize(QSize(20, 20))
+        button8.setMaximumSize(20, 20)
+        self.button_layout.addWidget(button8, alignment=Qt.AlignLeft)
 
         spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.button_layout.addItem(spacer)
 
+        button_file_img_theme = """
+                    QPushButton {
+                        background-color: white;
+                        border: none; 
+                        border-radius: 3;
+
+
+                    }
+                    QPushButton:pressed {
+                        background-color: #4f4f4f; 
+                    }
+                    QPushButton:hover {
+                        background-color: #bababa; 
+                    }
+                """
+
         button_file = QPushButton()
-        button_file.setStyleSheet("background-color: #667B68;"
-                                  )
+        button_file.setStyleSheet(button_file_img_theme)
         button_file.setIcon(QIcon("add_file.png"))
+        button_file.setToolTip("Send a file\n(Not working yet im on it)")
         button_file.setIconSize(QSize(16, 16))
         button_file.setMaximumSize(20, 20)
-        # button1.clicked.connect(self.button1_clicked)  # Connectez-le à une fonction de gestion d'événements
+        # button1.clicked.connect(self.button1_clicked)
         self.button_layout.addWidget(button_file, alignment=Qt.AlignRight)
 
         button_img = QPushButton()
-        button_img.setStyleSheet("background-color: #667B68;"
-                                 )
+        button_img.setStyleSheet(button_file_img_theme)
         button_img.setIcon(QIcon("add_img.png"))
+        button_img.setToolTip("Send an image")
         button_img.setIconSize(QSize(20, 20))
         button_img.setMaximumSize(20, 20)
-        button_img.clicked.connect(self.openFileNameDialog)  # Connectez-le à une fonction de gestion d'événements
+        button_img.clicked.connect(self.openFileNameDialog)
         self.button_layout.addWidget(button_img, alignment=Qt.AlignRight)
-
-
 
         self.widget_button.hide()
 
@@ -595,7 +888,7 @@ class MainWindow(QMainWindow):
         self.champ_message.setStyleSheet("border-color: white;"
                                          )
         # self.layout.addWidget(self.champ_message)
-        self.champ_message.setMaximumWidth(500)
+        self.champ_message.setMaximumWidth(600)
         self.champ_message.setMaximumHeight(60)
 
         text_fond = "Type in your message..."
@@ -620,6 +913,7 @@ class MainWindow(QMainWindow):
         # self.space_for_send_button.setStyleSheet("background-color: white;")
 
         self.button_smiley = QPushButton("+")
+        self.button_smiley.setToolTip("for sending images files or emojis")
         self.button_smiley.setStyleSheet("""
                     QPushButton {
                         background-color: white;
@@ -657,6 +951,7 @@ class MainWindow(QMainWindow):
         icone = QIcon("send.png")
         self.send_button.setIcon(icone)
         self.send_button.setIconSize(QSize(24, 24))
+        self.send_button.setToolTip("Send a message")
 
         self.send_button.setStyleSheet("""
             QPushButton {
@@ -725,51 +1020,148 @@ class MainWindow(QMainWindow):
             item.setIcon(icon)
             model.appendRow(item)
 
+        theme_blue_button = """
+                QPushButton {
+                    background-color: #7099bf;
+                    color: #000000;
+                    border-radius:3px;
+                    border: 1px solid #2f3235;
+                    padding: 2px 5px;
+
+                }
+                QPushButton:hover {
+                    background-color: #bababa;
+                }
+                QPushButton:pressed {
+                    background-color: #a8a8a8;
+                }
+                QPushButton:disabled {
+                    background-color: #f0f0f0;
+                    color: #a9a9a9;
+                    border-color: #dcdcdc;
+                }
+                """
+
         self.button_add_contact = QPushButton("Add contact")
         self.button_add_contact.clicked.connect(self.show_contact_windows)
         self.layout.addWidget(self.button_add_contact)
+        self.button_add_contact.setToolTip("add a contact to your contact list")
+        self.button_add_contact.setStyleSheet("""
+                QPushButton {
+                    background-color: #7099bf;
+                    color: #000000;
+                    border-radius:3px;
+                    border: 1px solid #2f3235;
+                    padding: 5px 5px;
 
-        self.label_nom = QLabel("<b>Name: </b>")
-        self.layout.addWidget(self.label_nom)
+                }
+                QPushButton:hover {
+                    background-color: #bababa;
+                }
+                QPushButton:pressed {
+                    background-color: #a8a8a8;
+                }
+                QPushButton:disabled {
+                    background-color: #f0f0f0;
+                    color: #a9a9a9;
+                    border-color: #dcdcdc;
+                }
+                """)
+
+        self.button_delete_contact = QPushButton("Delete contact")
+        self.button_delete_contact.clicked.connect(self.show_delete_contact_windows)
+        self.layout.addWidget(self.button_delete_contact)
+        self.button_delete_contact.setStyleSheet(theme_blue_button)
+        self.button_delete_contact.setToolTip("Delete a contact by giving is name")
+
+        # Largeur fixe pour les labels
+        label_width = 80
+
+        # Layout pour le nom
+        self.layout_name = QHBoxLayout()
+        self.layout.addLayout(self.layout_name)
+        self.layout_name.setContentsMargins(3, 3, 3, 3)
+
+        self.label_nom = QLabel("<b>Name:</b>")
+        self.label_nom.setFixedWidth(label_width)
+        self.layout_name.addWidget(self.label_nom)
 
         self.champ_nom = QLineEdit()
         self.champ_nom.setStyleSheet("background-color: white;")
-        self.layout.addWidget(self.champ_nom)
+        self.layout_name.addWidget(self.champ_nom)
+
+        # Layout pour la clé privée
+        self.layout_private_key = QHBoxLayout()
+        self.layout.addLayout(self.layout_private_key)
+        self.layout_private_key.setContentsMargins(3, 3, 3, 3)
 
         self.label_privee = QLabel("<b>Private key: </b>")
-        self.layout.addWidget(self.label_privee)
+        self.label_privee.setFixedWidth(label_width)
+        self.layout_private_key.addWidget(self.label_privee)
 
         self.champ_private_key = QLineEdit()
         self.champ_private_key.setStyleSheet("background-color: white;")
         self.champ_private_key.setEchoMode(QLineEdit.Password)
         self.see = True
-        self.layout.addWidget(self.champ_private_key)
+        self.layout_private_key.addWidget(self.champ_private_key)
 
-        self.see_private_key = QPushButton("See Private Key")
+        icon_eye = QIcon(QPixmap("./oeil.png"))
+
+        self.see_private_key = QPushButton()
+        self.see_private_key.setIcon(icon_eye)
+        self.see_private_key.setToolTip("Show/hide Private key\nthis is the key you keep secret, it is for you and only you")
+        self.see_private_key.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+
+        self.see_private_key.setStyleSheet(theme_blue_button)
         self.see_private_key.clicked.connect(self.see_private)
-        self.layout.addWidget(self.see_private_key)
+        self.layout_private_key.addWidget(self.see_private_key, alignment=Qt.AlignCenter)
+
+        # Layout pour la clé publique
+        self.layout_public_key = QHBoxLayout()
+        self.layout.addLayout(self.layout_public_key)
+        self.layout_public_key.setContentsMargins(3, 3, 3, 3)
 
         self.label_public = QLabel("<b>Public key: </b>")
-        self.layout.addWidget(self.label_public)
+        self.label_public.setFixedWidth(label_width)
+        self.layout_public_key.addWidget(self.label_public)
 
         self.champ_public_key = QLineEdit()
         self.champ_public_key.setStyleSheet("background-color: white;")
-        self.layout.addWidget(self.champ_public_key)
+        self.layout_public_key.addWidget(self.champ_public_key)
 
-        self.generate_key_button = QPushButton("generate new keys")
+        self.button_copy = QPushButton("Copy")
+        self.button_copy.clicked.connect(self.copy_pub_key)
+        self.button_copy.setStyleSheet(theme_blue_button)
+        self.layout_public_key.addWidget(self.button_copy)
+        self.button_copy.setToolTip("This is the key you need to share\n to the people you want to talk with")
+
+        self.layout_manage_button = QVBoxLayout()
+        self.layout.addLayout(self.layout_manage_button)
+        # self.layout_manage_button.setContentsMargins(10, 10, 10, 10)
+
+        self.generate_key_button = QPushButton("generate a new key pair")
+        self.generate_key_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        self.generate_key_button.setStyleSheet(theme_blue_button)
+        self.generate_key_button.setToolTip("This is basically deleting your account and recreate an other")
 
         self.generate_key_button.clicked.connect(self.generate_keys)
-        self.layout.addWidget(self.generate_key_button)
+        self.generate_key_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        self.layout_manage_button.addWidget(self.generate_key_button, alignment=Qt.AlignCenter)
 
-        self.save_key_button = QPushButton("Save keys")
+        # self.save_key_button = QPushButton("Save keys")
+        # self.save_key_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        # self.save_key_button.setStyleSheet(theme_blue_button)
 
-        self.save_key_button.clicked.connect(self.show_password_windows_save)
-        self.layout.addWidget(self.save_key_button)
+        # self.save_key_button.clicked.connect(self.show_password_windows_save)
+        # self.layout_manage_button.addWidget(self.save_key_button, alignment=Qt.AlignCenter)
 
+        """
         self.get_key_button = QPushButton("Acess keys")
+        self.get_key_button.setStyleSheet(theme_blue_button)
 
         self.get_key_button.clicked.connect(self.show_password_windows_access)
-        self.layout.addWidget(self.get_key_button)
+        self.layout_manage_button.addWidget(self.get_key_button, alignment=Qt.AlignCenter)
+        """
 
         self.url_send = ''
         self.url_contenu = ''
@@ -801,9 +1193,9 @@ class MainWindow(QMainWindow):
         self.layout.addWidget(self.champ_public_key2)
         self.champ_public_key2.hide()
 
-        self.show_chat()
-
         self.counter = 0
+
+        self.create_all_files()
 
         with open("key_pair.txt", "r") as file:
             file = file.read().strip()
@@ -827,9 +1219,34 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     print(e)
 
+        with open("./parameters.txt", "r") as _file:
+            data = _file.read().split("\n")
+
+            for line in data:
+                if line.startswith("show_emoji_at:"):
+                    self.show_smiley = int(line.replace("show_emoji_at:", ""))
+
+        self.show_chat()
+
+    def copy_pub_key(self):
+        pub = self.champ_public_key.text()
+
+        clipboard = QApplication.clipboard()
+
+        clipboard.setText(pub)
+
+    def create_all_files(self):
+
+        list_files = ["contacts.txt", "key_pair.txt", "parameters.txt"]
+
+        for i in range(len(list_files)):
+            if not os.path.exists(f"./{list_files[i]}"):
+                with open(f"./{list_files[i]}", 'w') as f:
+                    f.write("")
+
     def openFileNameDialog(self):
         options = QFileDialog.Options()
-        #options |= QFileDialog.DontUseNativeDialog
+        # options |= QFileDialog.DontUseNativeDialog
         fileName, _ = QFileDialog.getOpenFileName(self, "Select a Picture to share  :)", "",
                                                   "Image Files (*.jpeg *jpg *.png);;All Files (*)", options=options)
         if fileName:
@@ -850,14 +1267,13 @@ class MainWindow(QMainWindow):
 
             public_key_sender = eval(self.champ_public_key.text())
 
-            image_encrypt = crro.encrypt(public_key, str(reduced_quality_bytes))
+            image_encrypt = crro.encrypt(public_key, reduced_quality_bytes)
 
-            image_encrypt_for_sender = crro.encrypt(public_key_sender, str(reduced_quality_bytes))
+            image_encrypt_for_sender = crro.encrypt(public_key_sender, reduced_quality_bytes)
 
             image_signed = "__IMAGE__" + "\n" + image_encrypt + "\n" + image_encrypt_for_sender
 
-            image_signed = crro.sign(private_key, str(image_signed))
-
+            image_signed = crro.sign(private_key, image_signed.encode())
 
             print("image signed", image_signed)
 
@@ -881,7 +1297,6 @@ class MainWindow(QMainWindow):
             response_send = requests.post(self.url_send, data=data)
             if response_send.status_code == 200:
                 print("image send!")
-
 
     def insert_smiley(self, smiley):
         unicode_code = smiley
@@ -915,7 +1330,7 @@ class MainWindow(QMainWindow):
         def downloadFinished(content):
             try:
                 # Print the content of the file.
-                #print("content in download finish", content.decode())  # Assuming content is in bytes
+                # print("content in download finish", content.decode())  # Assuming content is in bytes
                 self.content = content.decode()
 
                 # Delete the thread when no longer needed.
@@ -1026,6 +1441,22 @@ class MainWindow(QMainWindow):
             # self.show_chat()
 
     @try_except
+    def closeEvent(self, event):
+        with open("./parameters.txt", "r") as file:
+            data = file.read()
+
+        lines = data.split("\n")
+        for line in lines:
+            if line.startswith("show_emoji_at:"):
+                print("find lines")
+
+                new_data = data.replace(line, "show_emoji_at:" + str(self.show_smiley))
+
+                with open("./parameters.txt", "w") as file:
+                    file.write(new_data)
+        print("The close is clean")
+
+    @try_except
     def send_message(self, another):
 
         try:
@@ -1067,15 +1498,15 @@ class MainWindow(QMainWindow):
 
             message_plaintext = f"              {time}" + "\n" + name + ":\n" + message_plaintext
 
-            message = crro.encrypt(public_key_sender, message_plaintext)
+            message = crro.encrypt(public_key_sender, message_plaintext.encode())
 
-            message_for_sender = crro.encrypt(public_key, message_plaintext)
+            message_for_sender = crro.encrypt(public_key, message_plaintext.encode())
 
             message = message + "\n" + message_for_sender
 
             message = identifier + "\n" + message
 
-            message_signed = crro.sign(private_key_int, message)
+            message_signed = crro.sign(private_key_int, message.encode())
 
             if not message.strip():
                 return
@@ -1217,20 +1648,20 @@ class MainWindow(QMainWindow):
 
             self.model.clear()
 
-
             with open(f"./chat_data/{name}/chat_data.txt", "r") as file:
                 data = file.read()
                 password = self.password
                 data = scrro.decrypt(password, data).decode()
+
+                print("data from scrro", data)
                 # all_data = ""
                 self.all_data = data
 
-
-            #print("data from chat_data", data)
+            # print("data from chat_data", data)
             try:
 
                 data = data.split("---End_Message---")
-                #print("data: ", data)
+                # print("data: ", data)
             except Exception as e:
                 print(e)
 
@@ -1250,30 +1681,30 @@ class MainWindow(QMainWindow):
                         print("Them_Message")
                     elif "---Your_Image---" in data[i]:
 
-                        #message = base64.urlsafe_b64decode(data[i].replace("---Your_Image---", ""))
+                        # message = base64.urlsafe_b64decode(data[i].replace("---Your_Image---", ""))
 
                         message = base64.urlsafe_b64decode(data[i].replace("---Your_Image---", ""))
 
                         print("base64 decode message", message)
 
-                        #message = message[2:-1]
+                        # message = message[2:-1]
                         # Utiliser codecs.escape_decode pour convertir la chaîne en bytes
-                        #message, _ = codecs.escape_decode(message)
+                        # message, _ = codecs.escape_decode(message)
 
                         self.model.add_message(USER_ME, image_bytes=message)
                         print("Your_Image")
 
                     elif "---Them_Image---" in data[i]:
 
-                        #message = base64.urlsafe_b64decode(data[i].replace("---Your_Image---", ""))
+                        # message = base64.urlsafe_b64decode(data[i].replace("---Your_Image---", ""))
 
                         message = base64.urlsafe_b64decode(data[i].replace("---Them_Image---", ""))
 
                         print("base64 decode message", message)
 
-                        #message = message[2:-1]
+                        # message = message[2:-1]
                         # Utiliser codecs.escape_decode pour convertir la chaîne en bytes
-                        #message, _ = codecs.escape_decode(message)
+                        # message, _ = codecs.escape_decode(message)
 
                         self.model.add_message(USER_THEM, image_bytes=message)
                         print("Them_Image")
@@ -1285,7 +1716,7 @@ class MainWindow(QMainWindow):
 
                     self.start_contenu = data_file
 
-                #print("data_file", data_file)
+                # print("data_file", data_file)
 
             except Exception as e:
                 print("in start", e)
@@ -1331,7 +1762,7 @@ class MainWindow(QMainWindow):
             print("im in start = False")
             start_contenu = self.start_contenu
 
-            print("contenu_actuel_chiffrer", contenu_actuel_chiffrer )
+            print("contenu_actuel_chiffrer", contenu_actuel_chiffrer)
             print("self.start_contenu", self.start_contenu)
 
             if contenu_actuel_chiffrer != self.start_contenu:
@@ -1361,8 +1792,8 @@ class MainWindow(QMainWindow):
                 personal_public_key_for_hash = str(self.champ_public_key.text())
 
                 private_key = int.from_bytes(base64.urlsafe_b64decode(private_key), byteorder="big")
-                #print("private_key base64 decode", private_key)
-                #print("we are in!", contenu_actuel_chiffrer_extract)
+                # print("private_key base64 decode", private_key)
+                # print("we are in!", contenu_actuel_chiffrer_extract)
 
                 chat_data = []
 
@@ -1385,8 +1816,8 @@ class MainWindow(QMainWindow):
                         # Récupérer le message avec les balises
                         message = "---BEGIN SIGNED CRRO MESSAGE---" + match.group(1) + "---END SIGNED CRRO MESSAGE---"
 
-                        #print("Message:")
-                        #print(message)
+                        # print("Message:")
+                        # print(message)
 
                         message_encrypt = str(message)
 
@@ -1395,56 +1826,53 @@ class MainWindow(QMainWindow):
                             sign_yes_or_no, message_only = crro.verify_signature(public_key, message_encrypt)
 
                         except Exception as e:
-                            print(e)
+                            print("error when verify_signature", e)
 
-                        #print("sign_yes_or_no", sign_yes_or_no)
+                        print("sign_yes_or_no", sign_yes_or_no)
 
                         if sign_yes_or_no == True:
-                            #print("Message encode:", message_only)
+                            print("Message encode:", message_only)
 
-                            if "---BEGIN SIGNED CRRO IMAGE---" in message_only:
-                                message_only = message_only.replace("---BEGIN SIGNED CRRO IMAGE---", "")
+                            if "__IMAGE__" in message_only:
+                                print("an image was found")
+                                message_only = message_only
                                 try:
                                     message = crro.decrypt(private_key, message_only)
 
-                                    message = message[2:-1]
+                                    # message = message[2:-1]
                                     # Utiliser codecs.escape_decode pour convertir la chaîne en bytes
-                                    message, _ = codecs.escape_decode(message)
+                                    # message, _ = codecs.escape_decode(message)
 
                                 except Exception as e:
                                     match = pattern.search(contenu_actuel, match.end())
-                                    print("Signature valid but decryption failed the message is pass")
+                                    print("Signature valid but decryption failed the message is pass", e)
                                     continue
 
-
-
-                                self.all_data = self.all_data + "---Them_Image---" + base64.urlsafe_b64encode(message).decode() + "---End_Message---"
+                                self.all_data = self.all_data + "---Them_Image---" + base64.urlsafe_b64encode(
+                                    message).decode() + "---End_Message---"
 
                                 self.model.add_message(USER_THEM, image_bytes=message)
                             else:
 
-
-
                                 try:
-                                    message = crro.decrypt(private_key, message_only)#.decode()
+                                    print("in 2")
+                                    message = crro.decrypt(private_key, message_only).decode()
 
                                 except Exception as e:
                                     match = pattern.search(contenu_actuel, match.end())
                                     print("Signature valid but decryption failed the message is pass")
                                     continue
 
-                                #print("message", message)
+                                # print("message", message)
 
                                 message = str(message)
 
-                                #print("decypted message", message)
+                                # print("decypted message", message)
 
                                 # Ajouter le message au champ de texte
                                 # all_messages.append(message)
 
-
                                 self.all_data = self.all_data + "---Them_Message---" + message + "---End_Message---"
-
 
                                 self.model.add_message(USER_THEM, message)
 
@@ -1455,7 +1883,7 @@ class MainWindow(QMainWindow):
 
 
                         else:
-                            #print("personal_public_key", personal_public_key, "    message", message)
+                            # print("personal_public_key", personal_public_key, "    message", message)
 
                             try:
 
@@ -1470,29 +1898,31 @@ class MainWindow(QMainWindow):
 
                                 if "__IMAGE__" in message[0]:
                                     print("in if begin Image")
-                                    #print("message[2]", message[2])
-                                    #print("private_key", private_key)
-                                    #print("all data image", "---BEGIN CRRO MESSAGE---" + message[2])
+                                    # print("message[2]", message[2])
+                                    # print("private_key", private_key)
+                                    # print("all data image", "---BEGIN CRRO MESSAGE---" + message[2])
 
                                     try:
                                         message = crro.decrypt(private_key,
-                                                               "---BEGIN CRRO MESSAGE---" + message[2]).decode()
+                                                               "---BEGIN CRRO MESSAGE---" + message[2])  # .decode()
 
-                                        #message = decode_base64_to_pixmap(message)
+                                        # message = decode_base64_to_pixmap(message)
 
-                                        #print("reduced_quality_bytes after ",message)
+                                        # print("reduced_quality_bytes after ",message)
 
-                                        message = message[2:-1]
+                                        # Je n'utilise plus les codec mais garde les lignes dans le doute d'un changement de protocol
+                                        # message = message[2:-1]
                                         # Utiliser codecs.escape_decode pour convertir la chaîne en bytes
-                                        message, _ = codecs.escape_decode(message)
+                                        # message, _ = codecs.escape_decode(message)
 
 
                                     except Exception as e:
                                         match = pattern.search(contenu_actuel, match.end())
-                                        print("Signature valid but decryption failed the message is pass")
+                                        print("Signature valid but decryption failed the message is pass", e)
                                         continue
 
-                                    self.all_data = self.all_data + "---Your_Image---" + base64.urlsafe_b64encode(message).decode() + "---End_Message---"
+                                    self.all_data = self.all_data + "---Your_Image---" + base64.urlsafe_b64encode(
+                                        message).decode() + "---End_Message---"
 
                                     print("Image bytes: ", message)
 
@@ -1509,15 +1939,14 @@ class MainWindow(QMainWindow):
                                         print("Signature valid but decryption failed the message is pass")
                                         continue
 
-                                    #print("message", message)
+                                    # print("message", message)
 
                                     message = str(message)
 
-                                    #print("decypted message", message)
+                                    # print("decypted message", message)
 
                                     # Ajouter le message au champ de texte
                                     # all_messages.append(message)
-
 
                                     self.all_data = self.all_data + "---Your_Message---" + message + "---End_Message---"
 
@@ -1538,7 +1967,7 @@ class MainWindow(QMainWindow):
 
                     try:
 
-                        #print("contenu actuel", contenu_actuel)
+                        # print("contenu actuel", contenu_actuel)
 
                         print("self.all_data", self.all_data)
 
@@ -1549,8 +1978,12 @@ class MainWindow(QMainWindow):
                 if self.all_data.strip():
                     print("all data ", self.all_data, "End all data")
                     with open(f"./chat_data/{name}/chat_data.txt", "w") as file:
+                        print("here")
+
+                        print("or here?")
                         print(password)
                         encrypted_data = scrro.encrypt(password, str(self.all_data).encode()).decode()
+                        print("or over here ?")
 
                         file.write(encrypted_data)
 
@@ -1581,7 +2014,7 @@ class MainWindow(QMainWindow):
     @try_except
     def first_time(self, password, name):
         self.champ_nom.setText(name)
-        self.generate_keys()
+        self.generate_keys_first_time()
         self.champ_server.setText("Error during connexion to: ")
 
         # mon_thread = threading.Thread(target=self.get_contenu_in_thread())
@@ -1590,6 +2023,10 @@ class MainWindow(QMainWindow):
         # mon_thread.start()
 
         self.save_keys(password)
+
+    def show_donation_bitcoin_windows(self):
+        bitcoin = Bitcoin_donation(self)
+        bitcoin.exec_()
 
     def show_fisrt_time_password_windows(self, start):
         for_what = "first_time"
@@ -1604,6 +2041,10 @@ class MainWindow(QMainWindow):
     def show_contact_windows(self, start):
         get_contact = Get_Contact(self)
         get_contact.exec_()
+
+    def show_delete_contact_windows(self, start):
+        del_contact = Del_Contact(self)
+        del_contact.exec_()
 
     def show_password_windows_save(self):
         for_what = "save"
@@ -1680,6 +2121,30 @@ class MainWindow(QMainWindow):
 
     def generate_keys(self):
 
+        yes_or_no = QMessageBox.question(self,
+                                         'Confirmation',
+                                         'By generating new key you will delete your current key pair, are you sure you '
+                                         'want to generate a new key pair?',
+                                         QMessageBox.Yes | QMessageBox.No,
+                                         QMessageBox.No)
+
+        # Vérifier la réponse de l'utilisateur
+        if yes_or_no == QMessageBox.Yes:
+            self.private_key = crro.generate_private_key()
+
+            self.public_key = crro.generate_public_key(self.private_key)
+
+            self.private_key = self.private_key.to_bytes((self.private_key.bit_length() + 7) // 8, byteorder='big')
+
+            self.champ_private_key.setText(base64.urlsafe_b64encode(self.private_key).decode())
+            self.champ_public_key.setText(str(self.public_key))
+
+            self.show_password_windows_save()
+        else:
+            return
+
+    def generate_keys_first_time(self):
+
         self.private_key = crro.generate_private_key()
 
         self.public_key = crro.generate_public_key(self.private_key)
@@ -1689,6 +2154,7 @@ class MainWindow(QMainWindow):
         self.champ_private_key.setText(base64.urlsafe_b64encode(self.private_key).decode())
         self.champ_public_key.setText(str(self.public_key))
 
+
     def show_chat(self):
 
         self.text_edit.show()
@@ -1696,7 +2162,10 @@ class MainWindow(QMainWindow):
         self.send_button.show()
         self.label_name_current.show()
         self.button_smiley.show()
-        self.show_smiley = 2
+
+        if self.show_smiley == 1:
+            self.widget_button.show()
+        #self.show_smiley = 2
 
         self.champ_private_key.hide()
         self.champ_public_key.hide()
@@ -1705,8 +2174,8 @@ class MainWindow(QMainWindow):
         self.label_public.hide()
         self.champ_server.hide()
         self.label_server.hide()
-        self.get_key_button.hide()
-        self.save_key_button.hide()
+        # self.get_key_button.hide()
+        # self.save_key_button.hide()
         self.champ_public_key2.hide()
         self.label_public_key2.hide()
         self.champ_nom.hide()
@@ -1717,9 +2186,14 @@ class MainWindow(QMainWindow):
         self.see_private_key.hide()
         self.label_name_contact.hide()
         self.champ_name_contact.hide()
-
+        self.button_copy.hide()
+        self.button_delete_contact.hide()
 
         self.center_widget.setContentsMargins(0, 0, 0, 0)
+
+        self.layout_private_key.setContentsMargins(0, 0, 0, 0)
+        self.layout_name.setContentsMargins(0, 0, 0, 0)
+        self.layout_public_key.setContentsMargins(0, 0, 0, 0)
 
         # self.text_edit.scrollToBottom()
 
@@ -1734,8 +2208,8 @@ class MainWindow(QMainWindow):
         self.label_public.hide()
         self.champ_server.hide()
         self.label_server.hide()
-        self.get_key_button.hide()
-        self.save_key_button.hide()
+        # self.get_key_button.hide()
+        # self.save_key_button.hide()
         self.champ_public_key2.hide()
         self.label_public_key2.hide()
         self.champ_nom.hide()
@@ -1746,12 +2220,18 @@ class MainWindow(QMainWindow):
         self.champ_name_contact.hide()
         self.widget_button.hide()
         self.button_smiley.hide()
+        self.button_copy.hide()
 
         self.label_contacts.show()
         self.list_contacts.show()
         self.button_add_contact.show()
+        self.button_delete_contact.show()
 
         self.center_widget.setContentsMargins(5, 5, 5, 5)
+
+        self.layout_private_key.setContentsMargins(0, 0, 0, 0)
+        self.layout_name.setContentsMargins(0, 0, 0, 0)
+        self.layout_public_key.setContentsMargins(0, 0, 0, 0)
 
     def show_server(self):
         self.champ_private_key.hide()
@@ -1762,8 +2242,8 @@ class MainWindow(QMainWindow):
         self.text_edit.hide()
         self.champ_message.hide()
         self.send_button.hide()
-        self.get_key_button.hide()
-        self.save_key_button.hide()
+        # self.get_key_button.hide()
+        # self.save_key_button.hide()
         self.champ_nom.hide()
         self.label_nom.hide()
         self.label_contacts.hide()
@@ -1773,6 +2253,8 @@ class MainWindow(QMainWindow):
         self.label_name_current.hide()
         self.widget_button.hide()
         self.button_smiley.hide()
+        self.button_copy.hide()
+        self.button_delete_contact.hide()
 
         self.champ_server.show()
         self.label_server.show()
@@ -1782,6 +2264,10 @@ class MainWindow(QMainWindow):
         self.champ_name_contact.show()
 
         self.center_widget.setContentsMargins(5, 5, 5, 5)
+
+        self.layout_private_key.setContentsMargins(0, 0, 0, 0)
+        self.layout_name.setContentsMargins(0, 0, 0, 0)
+        self.layout_public_key.setContentsMargins(0, 0, 0, 0)
 
     def show_use_key(self):
         self.text_edit.hide()
@@ -1798,17 +2284,25 @@ class MainWindow(QMainWindow):
         self.champ_name_contact.hide()
         self.widget_button.hide()
         self.button_smiley.hide()
+        self.label_nom.hide()
+        self.label_name_current.hide()
+        self.button_delete_contact.hide()
 
         self.champ_private_key.show()
         self.champ_public_key.show()
         self.generate_key_button.show()
         self.label_privee.show()
         self.label_public.show()
-        self.get_key_button.show()
-        self.save_key_button.show()
+        # self.get_key_button.show()
+        # self.save_key_button.show()
         self.champ_nom.show()
         self.label_nom.show()
         self.see_private_key.show()
+        self.button_copy.show()
+
+        self.layout_private_key.setContentsMargins(3, 3, 3, 3)
+        self.layout_name.setContentsMargins(3, 3, 3, 3)
+        self.layout_public_key.setContentsMargins(3, 3, 3, 3)
 
         self.center_widget.setContentsMargins(5, 5, 5, 5)
 

@@ -23,8 +23,6 @@ from PySide6.QtWidgets import (
     QSpacerItem,
     QMessageBox,
     QAbstractItemView,
- 
-
 
     QApplication,
     QLineEdit,
@@ -100,7 +98,6 @@ def try_except(func):
             return func(*args, **kwargs)
         except Exception as e:
             print(f"Une exception s'est produite : {e}")
-            # Vous pouvez également gérer l'exception ici ou laisser le code gérant l'exception en aval.
 
     return wrapper
 
@@ -230,11 +227,11 @@ class By_Elg256(QDialog):
         super().__init__(parent)
 
         self.setWindowTitle('About Elg256')
-        self.setWindowIcon(QIcon("logo.png"))
+        self.setWindowIcon(QIcon("img/logo.png"))
 
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.MSWindowsFixedSizeDialogHint)
 
-        pixmap = QPixmap("./logo_crro.png")
+        pixmap = QPixmap("img/logo_crro.png")
         scaled_pixmap = pixmap.scaled(150, 150, Qt.AspectRatioMode.KeepAspectRatio)
 
         label_image = QLabel()
@@ -265,11 +262,11 @@ class About(QDialog):
         super().__init__(parent)
 
         self.setWindowTitle('About CrroChat')
-        self.setWindowIcon(QIcon("logo.png"))
+        self.setWindowIcon(QIcon("img/logo.png"))
 
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.MSWindowsFixedSizeDialogHint)
 
-        pixmap = QPixmap("./logo.png")
+        pixmap = QPixmap("img/logo.png")
         scaled_pixmap = pixmap.scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio)
 
         label_image = QLabel()
@@ -302,7 +299,7 @@ class Bitcoin_donation(QDialog):
         super().__init__(parent)
 
         self.setWindowTitle('Bitcoin Donation')
-        self.setWindowIcon(QIcon("logo.png"))
+        self.setWindowIcon(QIcon("img/logo.png"))
 
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.MSWindowsFixedSizeDialogHint)
 
@@ -332,7 +329,7 @@ class Get_Passord(QDialog):
         self.start = start
         self.main_window = main_window  # Référence à l'instance de MainWindow
         self.setWindowTitle('Password')
-        self.setWindowIcon(QIcon("logo.png"))
+        self.setWindowIcon(QIcon("img/logo.png"))
 
         print("for what: ", self.for_what)
 
@@ -400,7 +397,7 @@ class Find_server(QDialog):
         super().__init__(parent)
 
         self.setWindowTitle('Find a server')
-        self.setWindowIcon(QIcon("logo.png"))
+        self.setWindowIcon(QIcon("img/logo.png"))
         self.layout = QVBoxLayout(self)
 
         self.text_label = QLabel("You can use your own http server or use a community server.\n"
@@ -466,7 +463,7 @@ class Get_Contact(QDialog):
         super().__init__(parent)
 
         try:
-            self.setWindowIcon(QIcon("logo.png"))
+            self.setWindowIcon(QIcon("img/logo.png"))
 
             self.main_window = main_window  # Référence à l'instance de MainWindow
             self.setWindowTitle('Add contact')
@@ -565,7 +562,7 @@ class Del_Contact(QDialog):
         super().__init__(parent)
 
         try:
-            self.setWindowIcon(QIcon("logo.png"))
+            self.setWindowIcon(QIcon("img/logo.png"))
 
             self.main_window = main_window  # Référence à l'instance de MainWindow
             self.setWindowTitle('Delete a contact')
@@ -643,6 +640,129 @@ class Del_Contact(QDialog):
         except Exception as e:
             print(e)
 
+class Mod_Contact(QDialog):
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+
+        try:
+            self.setWindowIcon(QIcon("img/logo.png"))
+
+            self.main_window = main_window  # Référence à l'instance de MainWindow
+            self.setWindowTitle('Modify a contact')
+
+            # Créer le layout principal vertical
+            self.layout = QVBoxLayout(self)
+
+            self.line_to_modif = None
+            self.data = None
+
+            # Largeur fixe pour les labels
+            label_width = 80
+
+            # Layout pour le serveur (anciennement clé privée)
+            self.layout_private_key = QVBoxLayout()
+            self.layout.addLayout(self.layout_private_key)
+            self.layout_private_key.setContentsMargins(3, 3, 3, 3)
+
+            self.label_server = QLabel("Write the exact name of the contact you want to modify")
+            self.layout_private_key.addWidget(self.label_server)
+
+            # Layout pour le nom
+            self.layout_name = QHBoxLayout()
+            self.layout.addLayout(self.layout_name)
+            self.layout_name.setContentsMargins(3, 3, 3, 3)
+
+            self.label_nom = QLabel("<b>Name:</b>")
+            self.label_nom.setFixedWidth(label_width)
+            self.layout_name.addWidget(self.label_nom)
+
+            self.champ_name = QLineEdit()
+            # self.champ_nom.setStyleSheet("background-color: white;")
+            self.layout_name.addWidget(self.champ_name)
+
+            # Layout pour le serveur
+            self.layout_server = QHBoxLayout()
+            self.layout.addLayout(self.layout_server)
+            self.layout_server.setContentsMargins(3, 3, 3, 3)
+
+            self.label_server = QLabel("<b>Server:</b>")
+            self.label_server.setFixedWidth(label_width)
+            self.layout_server.addWidget(self.label_server)
+
+            self.champ_server = QLineEdit()
+            self.champ_server.setMinimumWidth(350)
+            # self.champ_nom.setStyleSheet("background-color: white;")
+            self.layout_server.addWidget(self.champ_server)
+
+
+            # Layout for public key
+            self.layout_key = QHBoxLayout()
+            self.layout.addLayout(self.layout_key)
+            self.layout_key.setContentsMargins(3, 3, 3, 3)
+
+            self.label_key = QLabel("<b>Public key:</b>")
+            self.label_key.setFixedWidth(label_width)
+            self.layout_key.addWidget(self.label_key)
+
+            self.champ_key = QLineEdit()
+            # self.champ_nom.setStyleSheet("background-color: white;")
+            self.layout_key.addWidget(self.champ_key)
+
+            self.ok_button = QPushButton('Search contact', self)
+            self.layout.addWidget(self.ok_button)
+            self.ok_button.clicked.connect(self.take_user_input)
+
+            self.modify_button = QPushButton('Modify contact', self)
+            self.layout.addWidget(self.modify_button)
+            self.modify_button.clicked.connect(self.modify_contact)
+
+        except Exception as e:
+            print("An error occurred:", e)
+
+    def take_user_input(self, checked=False):
+        try:
+            name = self.champ_name.text()
+
+            with open("./contacts.txt", "r") as file:
+                self.data = file.read()
+
+            split_data = self.data.split(";")
+
+
+            for i, line in enumerate(split_data):
+                print(line[i])
+                if line.startswith(f"{name}"):
+                    self.line_to_modif = line + ";" + split_data[i+1] + ";" + split_data[i+2]
+                    break
+
+            print("line to modif", self.line_to_modif)
+
+            line_to_modif = self.line_to_modif.split(";")
+
+            name = line_to_modif[0]
+            server = line_to_modif[1]
+            key = line_to_modif[2]
+
+            self.champ_server.setText(server)
+            self.champ_key.setText(key)
+
+            self.main_window.refresh_contact_list()
+
+
+        except Exception as e:
+            print(e)
+
+    def modify_contact(self, checked=False):
+
+        new_data = self.champ_name.text() + ";" + self.champ_server.text() + ";" + self.champ_key.text() + ";"
+        modif_data = self.data.replace(self.line_to_modif, new_data)
+
+        with open("./contacts.txt", "w") as file:
+            file.write(modif_data)
+
+
+        self.accept()
+
 
 class Downloader(QThread):
     contentReady = Signal(bytes)
@@ -673,7 +793,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        oImage = QImage("background.png")
+        oImage = QImage("img/background.png")
         sImage = oImage.scaled(QSize(1000, 800))  # resize Image to widgets size
         palette = QPalette()
         palette.setBrush(QPalette.ColorRole.Window, QBrush(sImage))
@@ -692,7 +812,7 @@ class MainWindow(QMainWindow):
         # background-image: linear-gradient(rgba(0, 0, 255, 0.5), rgba(255, 255, 0, 0.5)),
         # url("../../media/examples/lizard.png");
 
-        self.setWindowIcon(QIcon("logo.png"))
+        self.setWindowIcon(QIcon("img/logo.png"))
 
         self.content = ""
 
@@ -752,9 +872,9 @@ class MainWindow(QMainWindow):
         bar.addAction(contact_action)
         contact_action.triggered.connect(self.show_contacts)
 
-        # server_action = QAction('Server', self)
-        # bar.addAction(server_action)
-        # server_action.triggered.connect(self.show_server)
+        #server_action = QAction('Server', self)
+        #bar.addAction(server_action)
+        #server_action.triggered.connect(self.show_server)
 
         key_action = QAction("Keys", self)
         bar.addAction(key_action)
@@ -765,8 +885,8 @@ class MainWindow(QMainWindow):
         # Menu Edition
         edit_menu = bar.addMenu('About')
         version = QAction('Version 0.1', self)
-        creator = QAction(QIcon('./logo_crro.png'),'By Elg256', self)
-        support_us = QAction(QIcon('./real_money.png'), "Support us", self)
+        creator = QAction(QIcon('img/logo_crro.png'), 'By Elg256', self)
+        support_us = QAction(QIcon('img/real_money.png'), "Support us", self)
         edit_menu.addAction(version)
         edit_menu.addAction(creator)
         edit_menu.addAction(support_us)
@@ -889,7 +1009,7 @@ class MainWindow(QMainWindow):
 
         # Bouton 1
         button1 = QPushButton()
-        icon = QIcon("emoji1.png")
+        icon = QIcon("img/emoji1.png")
         button1.setIcon(icon)
 
         button1.setStyleSheet(button_emoji_theme)
@@ -900,7 +1020,7 @@ class MainWindow(QMainWindow):
         self.button_layout.addWidget(button1, alignment=Qt.AlignmentFlag.AlignLeft)
 
         button2 = QPushButton()
-        button2.setIcon(QIcon("emoji2.png"))
+        button2.setIcon(QIcon("img/emoji2.png"))
         button2.setIconSize(QSize(20, 20))
         button2.setMaximumSize(20, 20)
         button2.setStyleSheet(button_emoji_theme)
@@ -911,7 +1031,7 @@ class MainWindow(QMainWindow):
 
         button3 = QPushButton()
         button3.setStyleSheet(button_emoji_theme)
-        button3.setIcon(QIcon("emoji3.png"))
+        button3.setIcon(QIcon("img/emoji3.png"))
         button3.clicked.connect(
             lambda: self.insert_smiley("U+1F602"))
         button3.setIconSize(QSize(20, 20))
@@ -922,7 +1042,7 @@ class MainWindow(QMainWindow):
         button4.setStyleSheet(button_emoji_theme)
         button4.clicked.connect(
             lambda: self.insert_smiley("U+1F605"))
-        button4.setIcon(QIcon("emoji4.png"))
+        button4.setIcon(QIcon("img/emoji4.png"))
         button4.setIconSize(QSize(20, 20))
         button4.setMaximumSize(20, 20)
         self.button_layout.addWidget(button4, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -931,7 +1051,7 @@ class MainWindow(QMainWindow):
         button5.setStyleSheet(button_emoji_theme)
         button5.clicked.connect(
             lambda: self.insert_smiley("U+1F60D"))
-        button5.setIcon(QIcon("emoji5.png"))
+        button5.setIcon(QIcon("img/emoji5.png"))
         button5.setIconSize(QSize(20, 20))
         button5.setMaximumSize(20, 20)
         self.button_layout.addWidget(button5, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -940,7 +1060,7 @@ class MainWindow(QMainWindow):
         button6.setStyleSheet(button_emoji_theme)
         button6.clicked.connect(
             lambda: self.insert_smiley("U+1F618 "))
-        button6.setIcon(QIcon("emoji6.png"))
+        button6.setIcon(QIcon("img/emoji6.png"))
         button6.setIconSize(QSize(20, 20))
         button6.setMaximumSize(20, 20)
         self.button_layout.addWidget(button6, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -949,7 +1069,7 @@ class MainWindow(QMainWindow):
         button7.setStyleSheet(button_emoji_theme)
         button7.clicked.connect(
             lambda: self.insert_smiley("U+1F610"))
-        button7.setIcon(QIcon("emoji7.png"))
+        button7.setIcon(QIcon("img/emoji7.png"))
         button7.setIconSize(QSize(20, 20))
         button7.setMaximumSize(20, 20)
         self.button_layout.addWidget(button7, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -958,7 +1078,7 @@ class MainWindow(QMainWindow):
         button8.setStyleSheet(button_emoji_theme)
         button8.clicked.connect(
             lambda: self.insert_smiley("U+1F60E	"))
-        button8.setIcon(QIcon("emoji8.png"))
+        button8.setIcon(QIcon("img/emoji8.png"))
         button8.setIconSize(QSize(20, 20))
         button8.setMaximumSize(20, 20)
         self.button_layout.addWidget(button8, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -984,7 +1104,7 @@ class MainWindow(QMainWindow):
 
         button_file = QPushButton()
         button_file.setStyleSheet(button_file_img_theme)
-        button_file.setIcon(QIcon("add_file.png"))
+        button_file.setIcon(QIcon("img/add_file.png"))
         button_file.setToolTip("Send a file\n(Not working yet im on it)")
         button_file.setIconSize(QSize(16, 16))
         button_file.setMaximumSize(20, 20)
@@ -993,7 +1113,7 @@ class MainWindow(QMainWindow):
 
         button_img = QPushButton()
         button_img.setStyleSheet(button_file_img_theme)
-        button_img.setIcon(QIcon("add_img.png"))
+        button_img.setIcon(QIcon("img/add_img.png"))
         button_img.setToolTip("Send an image")
         button_img.setIconSize(QSize(20, 20))
         button_img.setMaximumSize(20, 20)
@@ -1075,7 +1195,7 @@ class MainWindow(QMainWindow):
 
         # self.send_button = QPushButton(" Send")
         self.send_button = QPushButton()
-        icone = QIcon("send.png")
+        icone = QIcon("img/send.png")
         self.send_button.setIcon(icone)
         self.send_button.setIconSize(QSize(24, 24))
         self.send_button.setToolTip("Send a message")
@@ -1139,7 +1259,7 @@ class MainWindow(QMainWindow):
 
         self.list_contacts.doubleClicked.connect(self.fill_info_contact)
 
-        image_path = "./contacts.png"
+        image_path = "img/contacts.png"
 
         for i in self.only_contacts_name:
             item = QStandardItem(i)
@@ -1195,9 +1315,18 @@ class MainWindow(QMainWindow):
                 }
                 """)
 
+        self.layout_button_modif_delete = QHBoxLayout()
+        self.layout.addLayout(self.layout_button_modif_delete)
+
+        self.button_modify_contact = QPushButton("Modify contact")
+        self.button_modify_contact.clicked.connect(self.show_modify_contact_windows)
+        self.layout_button_modif_delete.addWidget(self.button_modify_contact)
+        self.button_modify_contact.setStyleSheet(theme_blue_button)
+        self.button_modify_contact.setToolTip("Modify a contact by giving is name")
+
         self.button_delete_contact = QPushButton("Delete contact")
         self.button_delete_contact.clicked.connect(self.show_delete_contact_windows)
-        self.layout.addWidget(self.button_delete_contact)
+        self.layout_button_modif_delete.addWidget(self.button_delete_contact)
         self.button_delete_contact.setStyleSheet(theme_blue_button)
         self.button_delete_contact.setToolTip("Delete a contact by giving is name")
 
@@ -1232,7 +1361,7 @@ class MainWindow(QMainWindow):
         self.see = True
         self.layout_private_key.addWidget(self.champ_private_key)
 
-        icon_eye = QIcon(QPixmap("./oeil.png"))
+        icon_eye = QIcon(QPixmap("img/oeil.png"))
 
         self.see_private_key = QPushButton()
         self.see_private_key.setIcon(icon_eye)
@@ -1418,7 +1547,7 @@ class MainWindow(QMainWindow):
             else:
                 file_name = hashlib.sha256(public_key_sender_for_file_name + public_key_for_file_name).hexdigest()
 
-            file_name = file_name + ".txt"
+            file_name = "crrochat_conversations" + "/" + file_name + ".txt"
             self.url_send = self.champ_server.text() + "/send_messages.php"
 
             data = {'contenu': image_signed.encode('utf-8') + b"\n\n", "file_name": file_name}
@@ -1507,7 +1636,7 @@ class MainWindow(QMainWindow):
             self.only_contacts_name.append(self.list_contacts_affiche[i])
 
         model = QStandardItemModel()
-        image_path = "./contacts.png"
+        image_path = "img/contacts.png"
         self.only_contacts_name.pop()
 
         for i in self.only_contacts_name:
@@ -1673,7 +1802,7 @@ class MainWindow(QMainWindow):
             else:
                 file_name = hashlib.sha256(public_key_sender_for_file_name + public_key_for_file_name).hexdigest()
 
-            file_name = file_name + ".txt"
+            file_name = "crrochat_conversations" + "/" + file_name + ".txt"
 
             self.url_send = self.champ_server.text() + "/send_messages.php"
 
@@ -1724,7 +1853,7 @@ class MainWindow(QMainWindow):
             else:
                 file_name = hashlib.sha256(public_key_sender + public_key).hexdigest()
 
-            file_name = file_name + ".txt"
+            file_name = "crrochat_conversations" + "/" + file_name + ".txt"
 
             self.url_contenu = self.champ_server.text() + f"/{file_name}"
         except Exception as e:
@@ -1760,7 +1889,7 @@ class MainWindow(QMainWindow):
 
         print("file name :", file_name)
 
-        url_path = server + "/" + file_name + ".txt"
+        url_path = server + "/" + "crrochat_conversations" + "/"+ file_name + ".txt"
 
         print("url_path: ", url_path)
 
@@ -2191,6 +2320,10 @@ class MainWindow(QMainWindow):
         get_contact = Get_Contact(self)
         get_contact.exec()
 
+    def show_modify_contact_windows(self, start):
+        mod_contact = Mod_Contact(self)
+        mod_contact.exec()
+
     def show_delete_contact_windows(self, start):
         del_contact = Del_Contact(self)
         del_contact.exec()
@@ -2339,6 +2472,7 @@ class MainWindow(QMainWindow):
         self.champ_name_contact.hide()
         self.button_copy.hide()
         self.button_delete_contact.hide()
+        self.button_modify_contact.hide()
 
         self.center_widget.setContentsMargins(0, 0, 0, 0)
 
@@ -2377,6 +2511,7 @@ class MainWindow(QMainWindow):
         self.list_contacts.show()
         self.button_add_contact.show()
         self.button_delete_contact.show()
+        self.button_modify_contact.show()
 
         self.center_widget.setContentsMargins(5, 5, 5, 5)
 
@@ -2406,6 +2541,7 @@ class MainWindow(QMainWindow):
         self.button_smiley.hide()
         self.button_copy.hide()
         self.button_delete_contact.hide()
+        self.button_modify_contact.hide()
 
         self.champ_server.show()
         self.label_server.show()
@@ -2438,6 +2574,7 @@ class MainWindow(QMainWindow):
         self.label_nom.hide()
         self.label_name_current.hide()
         self.button_delete_contact.hide()
+        self.button_modify_contact.hide()
 
         self.champ_private_key.show()
         self.champ_public_key.show()

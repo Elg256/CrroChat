@@ -3,10 +3,15 @@
 
 import requests
 import shutil
+import threading
+from multiprocessing import Process, Queue
+import json
+from json.decoder import JSONDecodeError
 
 # import codecs
 
-from PySide6.QtCore import QAbstractListModel, QMargins, QPoint, QSize, Qt, QRect, QThread, Signal
+
+from PySide6.QtCore import QAbstractListModel, QMargins, QPoint, QSize, Qt, QRect, QThread, Signal, QUrl
 from PySide6.QtGui import QColor, QFontMetrics, QPen, QFont, QPixmap, QStandardItemModel, QStandardItem, QIcon, QBrush, \
     QImage, QPalette, QPolygon
 # from PySide6 import QtCore
@@ -14,8 +19,9 @@ import os
 # import threading
 # import time  # pls delete this it is for debug
 
-from PySide6.QtGui import QImage, QPixmap ,QAction,QPainterPath
-from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QSize, Qt
+from PySide6.QtGui import QImage, QPixmap, QAction, QPainterPath, QCursor
+from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QSize, Qt, QItemSelectionModel, QModelIndex
+from PySide6.QtMultimedia import QSoundEffect, QMediaPlayer, QAudioOutput
 
 # from PySide6.QtGui import
 from PySide6.QtWidgets import (
@@ -33,16 +39,18 @@ from PySide6.QtWidgets import (
     QLayout,
     QWidget,
     QStyledItemDelegate,
+    QMenu
 )
 
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QPushButton, QLineEdit, QLabel, QSizePolicy, \
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QPushButton, QLineEdit, QLabel, \
+    QSizePolicy, \
     QDialog, QHBoxLayout
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QTextCursor
 
 from cryptcrro.asymetric import crro
 from cryptcrro.symetric import crro as scrro
@@ -64,6 +72,57 @@ TEXT_PADDING_THEM = QMargins(25, 15, 235, 15)
 TEXT_PADDING_ME = QMargins(220, 15, 25, 15)
 
 
+def kdf(password):
+    return hashlib.scrypt(
+        password.encode(),
+        salt=b"CryptCrroSalt",
+        n=2 ** 14,
+        r=8,
+        p=1,
+        dklen=32
+    )
+
+
+def long_poll(file_name, url, queue):
+    last_timestamp = None
+    # url = "http://crro-server.alwaysdata.net/CrroChat/long_poll.php"
+    url = f"{url}/CrroChat/long_poll.php"
+
+    #while not self.stop_event.is_set():
+    while True:
+        print(f"in loop {file_name}")
+        params = {
+            "file_name": file_name
+        }
+
+        if last_timestamp:
+            params["since"] = last_timestamp
+            print("last_timestamp", last_timestamp)
+
+        try:
+            response = requests.get(url, params=params, timeout=35)
+            messages = response.json()
+            print(messages)
+
+            if messages:
+                for msg in messages:
+                    print(f"[{msg['timestamp']}] ➤ {msg['msg']}")
+                    # self.decrypt_and_show_message(msg['msg'])
+                    queue.put(msg)
+                last_timestamp = messages[-1]['timestamp']
+        except requests.exceptions.Timeout:
+            pass  # Silence, juste une attente normale
+        except Exception as e:
+            print("Erreur :", e)
+
+
+def get_contact_by_name(contacts_dict, name):
+    for contact in contacts_dict.get("contacts", []):
+        if contact.get("name") == name:
+            return contact
+    return None
+
+
 def decode_base64_to_pixmap(base64_bytes):
     # Decode the base64 bytes
     image_bytes = base64.urlsafe_b64decode(base64_bytes)
@@ -80,7 +139,8 @@ def reduce_image_quality(file_path, quality=80, max_image_size=QSize(200, 200)):
 
     # Scale the image if it's larger than the max size
     if image.width() > max_image_size.width() or image.height() > max_image_size.height():
-        image = image.scaled(max_image_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        image = image.scaled(max_image_size, Qt.AspectRatioMode.KeepAspectRatio,
+                             Qt.TransformationMode.SmoothTransformation)
 
     # Convert image to bytes with reduced quality
     compressed_bytes = QByteArray()
@@ -106,6 +166,7 @@ def bytes_to_pixmap(image_bytes):
     image = QImage()
     image.loadFromData(image_bytes)
     return QPixmap.fromImage(image)
+
 
 """"
 class CustomTextEdit(QTextEdit):
@@ -190,6 +251,7 @@ class MessageDelegate(QStyledItemDelegate):
 
         return QSize(option.rect.width(), height)
 
+
 class MessageModel(QAbstractListModel):
     def __init__(self, main_window, *args, **kwargs):
         super(MessageModel, self).__init__(*args, **kwargs)
@@ -214,11 +276,13 @@ class MessageModel(QAbstractListModel):
         elif image_bytes:
             image = bytes_to_pixmap(image_bytes)
             if image.size().width() > max_image_size.width() or image.size().height() > max_image_size.height():
-                image = image.scaled(max_image_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                image = image.scaled(max_image_size, Qt.AspectRatioMode.KeepAspectRatio,
+                                     Qt.TransformationMode.SmoothTransformation)
             self.messages.append((who, None, image))
         self.layoutChanged.emit()
         bottom_index = self.createIndex(len(self.messages) - 1, 0)
-        self.main_window.text_edit.scrollToBottom()
+        #self.main_window.text_edit.scrollToBottom()
+
 
 
 
@@ -243,10 +307,10 @@ class By_Elg256(QDialog):
 
         self.label = QLabel("""
                 <p>This software is made by Elg256 and is part of the crro-software project.<br>
-                The crro-software project is all the cryptography related software from Elg256 learn more at: <a href="https://crro.neocities.org">https://crro.neocities.org</a></p></br>
-                <p>My OpenPGP public key hash is: 08E60E37D69E2787376B578762FB68E055D23FE9</p>
+                The crro-software project is all the cryptography related software from Elg256 learn more at: <a href="https://crro-projects.neocities.org/">https://crro-projects.neocities.org/</a></p></br>
+                <p>Our OpenPGP public key hash is: 08E60E37D69E2787376B578762FB68E055D23FE9</p>
                 <p></p>
-                <p>For any issus or question you can use your github or email.<br>
+                <p>For any issus or question you can use our github or email.<br>
                 Github: <a href="https://github.com/Elg256">https://github.com/Elg256</a></br>
                 <br>Email:elgremonter@gmail.com</p></br>
 
@@ -327,42 +391,45 @@ class Get_Passord(QDialog):
         super().__init__(parent)
         self.for_what = for_what
         self.start = start
-        self.main_window = main_window  # Référence à l'instance de MainWindow
+        self.main_window = main_window
         self.setWindowTitle('Password')
         self.setWindowIcon(QIcon("img/logo.png"))
-
-        print("for what: ", self.for_what)
+        self.layout = QVBoxLayout(self)
 
         if self.for_what == "first_time":
             self.label_name = QLabel("Name: ", self)
-            self.label_name.setGeometry(10, 0, 180, 20)
+            self.layout.addWidget(self.label_name)
 
             self.champ_name = QLineEdit(self)
-            self.champ_name.setGeometry(25, 20, 110, 20)
-
-            self.label_vide = QLabel("If you don't want to set \na Password just don't put one ", self)
-            self.label_vide.setGeometry(25, 140, 200, 30)
+            self.layout.addWidget(self.champ_name)
 
         self.label = QLabel('Password:', self)
-        self.label.setGeometry(10, 50, 110, 20)
+        self.layout.addWidget(self.label)
+        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.input_field = QLineEdit(self)
-        self.input_field.setGeometry(25, 70, 200, 20)
-        self.input_field.setEchoMode(QLineEdit.EchoMode.Password)
+        self.input_field = QPasswordLineEdit(self)
+        self.layout.addWidget(self.input_field)
 
         self.ok_button = QPushButton('Ok', self)
-        self.ok_button.setGeometry(25, 100, 200, 30)
+        self.layout.addWidget(self.ok_button)
 
         self.ok_button.clicked.connect(self.take_user_input)
 
-    @try_except
+        if self.for_what == "first_time":
+            self.label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+            self.label_vide = QLabel("If you don't want to set \na Password just don't put one ", self)
+            self.layout.addWidget(self.label_vide)
+
+
     def take_user_input(self, checked=False):
         print("before funct")
         user_input = self.input_field.text()
         print("before funct")
 
         if user_input.strip():
-            key = hashlib.sha256(user_input.encode()).digest()
+            print("in user_input.strip()")
+            key = kdf(user_input)
+            print(key)
         else:
             key = ""
 
@@ -376,8 +443,6 @@ class Get_Passord(QDialog):
             self.main_window.first_time(key, self.champ_name.text())
 
         if self.start == True:
-            with open("key_pair.txt", "r") as file:
-                data = file.read()
 
             self.main_window.access_key(key, start=True)
 
@@ -386,12 +451,13 @@ class Get_Passord(QDialog):
         elif self.for_what == "access":
             self.main_window.access_key(key)
 
+
         # except Exception as e:
         # print(e)
         self.accept()
 
 
-@try_except
+
 class Find_server(QDialog):
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
@@ -459,10 +525,11 @@ class Find_server(QDialog):
 
 
 class Get_Contact(QDialog):
-    def __init__(self, main_window, parent=None):
+    def __init__(self, main_window, key, parent=None):
         super().__init__(parent)
 
         try:
+            self.key = key
             self.setWindowIcon(QIcon("img/logo.png"))
 
             self.main_window = main_window  # Référence à l'instance de MainWindow
@@ -535,18 +602,47 @@ class Get_Contact(QDialog):
 
     def take_user_input(self, checked=False):
         try:
-            print("before funct")
+
+            filename = "contacts.json"
+            if os.path.exists(filename):
+                with open(filename, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if content:
+                        decrypted_json = scrro.decrypt(self.key, content)
+                        data = json.loads(decrypted_json)
+                    else:
+                        data = {"contacts": []}
+            else:
+                data = {"contacts": []}
+
             name = self.champ_name.text()
+            if any(c["name"] == name for c in data["contacts"]):
+                QMessageBox.information(self, "Contact with same name", "This name is already use.")
+                return
 
-            server = self.server.text()
+            folder_path = f'./chat_data/{name}'
+            os.mkdir(folder_path)
 
-            public_key = self.public_key.text()
+            file1_path = os.path.join(folder_path, "client_chat_data")
+            file2_path = os.path.join(folder_path, "last_message")
 
-            os.mkdir(f'./chat_data/{name}')
+            open(file1_path, "w", encoding="utf-8").close()
+            open(file2_path, "w", encoding="utf-8").close()
 
-            with open("contacts.txt", "a") as file:
-                data = name + ";" + server + ";" + public_key + ";"
-                file.write(data)
+            print("file created")
+
+            data["contacts"].append({
+                "name": name,
+                "server": self.server.text(),
+                "public_key": self.public_key.text()
+            })
+
+            json_text = json.dumps(data, indent=4)
+            encrypted_text = scrro.encrypt(self.key, json_text.encode())
+            print("self.key", self.key)
+
+            with open(filename, "wb") as f:
+                f.write(encrypted_text)
 
             self.main_window.refresh_contact_list()
 
@@ -557,98 +653,38 @@ class Get_Contact(QDialog):
             print(e)
 
 
-class Del_Contact(QDialog):
-    def __init__(self, main_window, parent=None):
+class QPasswordLineEdit(QLineEdit):
+    def __init__(self, parent=None):
         super().__init__(parent)
+        self.setEchoMode(QLineEdit.EchoMode.Password)
 
-        try:
-            self.setWindowIcon(QIcon("img/logo.png"))
+        self.iconShow = QIcon('img/eye_blind.png')
+        self.iconHide = QIcon('img/eye.png')
 
-            self.main_window = main_window  # Référence à l'instance de MainWindow
-            self.setWindowTitle('Delete a contact')
+        self.showPassAction = QAction(self.iconShow, 'Show password', self)
+        self.addAction(self.showPassAction, QLineEdit.ActionPosition.TrailingPosition)
+        self.showPassAction.setCheckable(True)
+        self.showPassAction.toggled.connect(self.toggle_password_visibility)
 
-            # Créer le layout principal vertical
-            self.layout = QVBoxLayout(self)
+    def toggle_password_visibility(self, show):
+        if show:
+            self.setEchoMode(QLineEdit.EchoMode.Normal)
+            self.showPassAction.setIcon(self.iconHide)
+        else:
+            self.setEchoMode(QLineEdit.EchoMode.Password)
+            self.showPassAction.setIcon(self.iconShow)
 
-            # Largeur fixe pour les labels
-            label_width = 80
-
-            # Layout pour le serveur (anciennement clé privée)
-            self.layout_private_key = QHBoxLayout()
-            self.layout.addLayout(self.layout_private_key)
-            self.layout_private_key.setContentsMargins(3, 3, 3, 3)
-
-            self.label_server = QLabel("Write the exact name of the contact you want to delete")
-            self.layout_private_key.addWidget(self.label_server)
-
-            # Layout pour le nom
-            self.layout_name = QHBoxLayout()
-            self.layout.addLayout(self.layout_name)
-            self.layout_name.setContentsMargins(3, 3, 3, 3)
-
-            self.label_nom = QLabel("<b>Name:</b>")
-            self.label_nom.setFixedWidth(label_width)
-            self.layout_name.addWidget(self.label_nom)
-
-            self.champ_name = QLineEdit()
-            # self.champ_nom.setStyleSheet("background-color: white;")
-            self.layout_name.addWidget(self.champ_name)
-
-            self.ok_button = QPushButton('Delete contact', self)
-            self.layout.addWidget(self.ok_button)
-            self.ok_button.clicked.connect(self.take_user_input)
-
-
-        except Exception as e:
-            print("An error occurred:", e)
-
-    def take_user_input(self, checked=False):
-        try:
-            name = self.champ_name.text()
-
-            with open("./contacts.txt", "r") as file:
-                data = file.read()
-
-            data = data.split(";")
-
-            index_to_remove = None
-            for i, line in enumerate(data):
-                if line.startswith(f"{name}"):
-                    index_to_remove = i
-                    break
-
-            if index_to_remove is not None:
-                del data[
-                    index_to_remove:index_to_remove + 3]
-
-            with open("./contacts.txt", "w") as file:
-                file.write(";".join(data))
-
-            try:
-                shutil.rmtree(f"./chat_data/{name}")
-                print(f"Dossier './chat_data/{name}' et tout son contenu ont été supprimés avec succès.")
-            except FileNotFoundError:
-                print(f"Le dossier './chat_data/{name}' n'existe pas.")
-            except PermissionError:
-                print(f"Permission refusée pour supprimer le dossier './chat_data/{name}'.")
-            except OSError as e:
-                print(f"Erreur : {e}")
-
-            self.main_window.refresh_contact_list()
-
-            self.accept()
-        except Exception as e:
-            print(e)
 
 class Mod_Contact(QDialog):
-    def __init__(self, main_window, parent=None):
+    def __init__(self, main_window, contact_name, key, parent=None):
         super().__init__(parent)
 
         try:
+            self.key = key
             self.setWindowIcon(QIcon("img/logo.png"))
 
             self.main_window = main_window  # Référence à l'instance de MainWindow
-            self.setWindowTitle('Modify a contact')
+            self.setWindowTitle('Contact info')
 
             # Créer le layout principal vertical
             self.layout = QVBoxLayout(self)
@@ -664,9 +700,6 @@ class Mod_Contact(QDialog):
             self.layout.addLayout(self.layout_private_key)
             self.layout_private_key.setContentsMargins(3, 3, 3, 3)
 
-            self.label_server = QLabel("Write the exact name of the contact you want to modify")
-            self.layout_private_key.addWidget(self.label_server)
-
             # Layout pour le nom
             self.layout_name = QHBoxLayout()
             self.layout.addLayout(self.layout_name)
@@ -677,6 +710,7 @@ class Mod_Contact(QDialog):
             self.layout_name.addWidget(self.label_nom)
 
             self.champ_name = QLineEdit()
+            self.champ_name.setText(contact_name)
             # self.champ_nom.setStyleSheet("background-color: white;")
             self.layout_name.addWidget(self.champ_name)
 
@@ -694,7 +728,6 @@ class Mod_Contact(QDialog):
             # self.champ_nom.setStyleSheet("background-color: white;")
             self.layout_server.addWidget(self.champ_server)
 
-
             # Layout for public key
             self.layout_key = QHBoxLayout()
             self.layout.addLayout(self.layout_key)
@@ -708,59 +741,69 @@ class Mod_Contact(QDialog):
             # self.champ_nom.setStyleSheet("background-color: white;")
             self.layout_key.addWidget(self.champ_key)
 
-            self.ok_button = QPushButton('Search contact', self)
-            self.layout.addWidget(self.ok_button)
-            self.ok_button.clicked.connect(self.take_user_input)
-
-            self.modify_button = QPushButton('Modify contact', self)
+            self.modify_button = QPushButton('Save change', self)
             self.layout.addWidget(self.modify_button)
             self.modify_button.clicked.connect(self.modify_contact)
+
+            self.take_user_input()
 
         except Exception as e:
             print("An error occurred:", e)
 
     def take_user_input(self, checked=False):
         try:
-            name = self.champ_name.text()
+            self.data = None
+            self.contact_to_modif = self.champ_name.text()
 
-            with open("./contacts.txt", "r") as file:
-                self.data = file.read()
-
-            split_data = self.data.split(";")
-
-
-            for i, line in enumerate(split_data):
-                print(line[i])
-                if line.startswith(f"{name}"):
-                    self.line_to_modif = line + ";" + split_data[i+1] + ";" + split_data[i+2]
-                    break
-
-            print("line to modif", self.line_to_modif)
-
-            line_to_modif = self.line_to_modif.split(";")
-
-            name = line_to_modif[0]
-            server = line_to_modif[1]
-            key = line_to_modif[2]
-
-            self.champ_server.setText(server)
-            self.champ_key.setText(key)
+            with open("./contacts.json", "rb") as file:
+                data = file.read()
+                if data:
+                    decrypted_data = scrro.decrypt(self.key, data)
+                    self.data = json.loads(decrypted_data)
+            contact = get_contact_by_name(self.data, self.contact_to_modif)
+            self.champ_server.setText(contact["server"])
+            self.champ_key.setText(contact["public_key"])
 
             self.main_window.refresh_contact_list()
-
 
         except Exception as e:
             print(e)
 
     def modify_contact(self, checked=False):
-
-        new_data = self.champ_name.text() + ";" + self.champ_server.text() + ";" + self.champ_key.text() + ";"
-        modif_data = self.data.replace(self.line_to_modif, new_data)
-
-        with open("./contacts.txt", "w") as file:
-            file.write(modif_data)
-
-
+        for contact in self.data["contacts"]:
+            print(contact, self.contact_to_modif)
+            if contact["name"] == self.contact_to_modif:
+                contact["name"] = self.champ_name.text()
+                contact["server"] = self.champ_server.text()
+                contact["public_key"] = self.champ_key.text()
+                if contact["name"] != self.contact_to_modif:
+                    for entry in os.listdir("./chat_data"):
+                        full_path = os.path.join("./chat_data", entry)
+                        if os.path.isdir(full_path) and entry == self.contact_to_modif:
+                            new_path = os.path.join("./chat_data", contact["name"])
+                            os.rename(full_path, new_path)
+                            break
+                if self.contact_to_modif == self.main_window.current_contact_name:
+                    self.main_window.current_contact_name = contact["name"]
+                    temp_data = json.dumps({"contact_name": contact["name"], "server": contact["server"],
+                                            "public_key": contact["public_key"]}).encode()
+                    encrypted_data = scrro.encrypt(self.main_window.password, temp_data).decode('utf-8')
+                    with open("parameters.json", "r") as file:
+                        content = file.read().strip()
+                        if content:
+                            file.seek(0)
+                            data = json.load(file)
+                            data['parameters']['last_contact'] = encrypted_data
+                    with open("parameters.json", "w") as file:
+                        json.dump(data, file, indent=4)
+                    self.main_window.label_name_current.setText(f" Chat with: {self.main_window.current_contact_name}")
+            break
+        with open("./contacts.json", "wb") as file:
+            data = json.dumps(self.data, indent=4)
+            data_encrypted = scrro.encrypt(self.key, data.encode())
+            print("self.key", self.key)
+            file.write(data_encrypted)
+        self.main_window.refresh_contact_list()
         self.accept()
 
 
@@ -773,7 +816,7 @@ class Downloader(QThread):
         self._content = None
         print("in init download Qthread")
 
-    @try_except
+    
     def run(self):
         print("in run download Qthread")
 
@@ -790,8 +833,23 @@ class Downloader(QThread):
 
 
 class MainWindow(QMainWindow):
+    play_sound_get_signal = Signal()
+    play_sound_send_signal = Signal()
+
     def __init__(self):
         super().__init__()
+
+        self.password = None
+        self.list_contacts_affiche = None
+        self.only_contacts_name = []
+
+        # start the thread to get all messages from queue
+        self.process = None
+        self.queue = Queue()
+
+        # This start thread have been move to access key function
+        #self.thread = threading.Thread(target=self.get_message, daemon=True)
+        #self.thread.start()
 
         oImage = QImage("img/background.png")
         sImage = oImage.scaled(QSize(1000, 800))  # resize Image to widgets size
@@ -799,9 +857,27 @@ class MainWindow(QMainWindow):
         palette.setBrush(QPalette.ColorRole.Window, QBrush(sImage))
         self.setPalette(palette)
 
-        self.show_smiley = 2
+        base_dir = os.path.dirname(__file__)
+        sound_path_get = os.path.join(base_dir, "sound", "notif_get.wav")
+
+        self.sound_get = QSoundEffect()
+        self.sound_get.setSource(QUrl.fromLocalFile(sound_path_get))
+        self.sound_get.setVolume(0.5)
+        self.play_sound_get_signal.connect(self.sound_get.play)
+
+        sound_path_send = os.path.join(base_dir, "sound", "notif_send.wav")
+        self.sound_send = QSoundEffect()
+        self.sound_send.setSource(QUrl.fromLocalFile(sound_path_send))
+        self.sound_send.setVolume(0.5)
+        self.play_sound_send_signal.connect(self.sound_send.play)
+
+
+        self.show_emoji = 2
 
         self.all_data = ""
+
+        self.stop_event = threading.Event()
+        self.thread = None
 
         self.setWindowTitle("CrroChat")
         self.setGeometry(100, 100, 450, 450)
@@ -831,7 +907,7 @@ class MainWindow(QMainWindow):
         center_layout.addLayout(self.layout)
 
         self.center_widget = QWidget()
-        self.center_widget.setStyleSheet("background-color:#6da2d2;")
+        self.center_widget.setStyleSheet("background-color:#9fc5e8;")
 
         self.center_widget.setContentsMargins(0, 0, 0, 0)
         self.center_widget.setContentsMargins(0, 0, 0, 5)
@@ -872,9 +948,9 @@ class MainWindow(QMainWindow):
         bar.addAction(contact_action)
         contact_action.triggered.connect(self.show_contacts)
 
-        #server_action = QAction('Server', self)
-        #bar.addAction(server_action)
-        #server_action.triggered.connect(self.show_server)
+        # server_action = QAction('Server', self)
+        # bar.addAction(server_action)
+        # server_action.triggered.connect(self.show_server)
 
         key_action = QAction("Keys", self)
         bar.addAction(key_action)
@@ -913,8 +989,8 @@ class MainWindow(QMainWindow):
         # Ajout du QHBoxLayout au QVBoxLayout principal
         self.layout.addLayout(self.h_layout)
         self.layout.setContentsMargins(0, 0, 0, 0)
-        self.name_contact = ""
-        self.label_name_current = QLabel(f" Chat with: {self.name_contact}")
+        self.current_contact_name = ""
+        self.label_name_current = QLabel(f" Chat with: {self.current_contact_name}")
         self.label_name_current.setFont(QFont("arial", 11))
         self.label_name_current.setStyleSheet("background-color:#4285c2;"
 
@@ -931,45 +1007,45 @@ class MainWindow(QMainWindow):
                     QListView {
                         background-color: #eeeeee;
                     }
-                    
+
                     /* Barre de défilement verticale */
                     QScrollBar:vertical {
                         border: 0px solid #555555;
                         background: #6DA2D2;
                         width: 12px;
-                        
+
                     }
                     QScrollBar::handle:vertical {
                         background: #6DA2D2;
-                        
+
                     }
                     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
                         background: #555555;
                         height: 5px;
                         subcontrol-position: bottom;
                         subcontrol-origin: margin;
-                            
+
                     }
-                    
+
                     /* Barre de défilement horizontale */
                     QScrollBar:horizontal {
                         border: 0px solid #555555;
                         background: #6DA2D2;
                         width: 12px;
-                        
+
                     }
                     QScrollBar::handle:horizontal {
                         background: #6DA2D2;
-                        
+
                     }
                     QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
                         background: #555555;
                         width: 10px;
                         subcontrol-position: bottom;
                         subcontrol-origin: margin;
-                            
+
                     }
-                    
+
                 """)
         self.text_edit.setItemAlignment(Qt.AlignmentFlag.AlignCenter)
         self.text_edit.setMaximumWidth(600)
@@ -1178,7 +1254,7 @@ class MainWindow(QMainWindow):
                 """)
 
         self.button_smiley.setContentsMargins(0, 0, 0, 0)
-        self.button_smiley.clicked.connect(self.show_smiley_funct)
+        self.button_smiley.clicked.connect(self.show_emoji_funct)
         self.button_smiley.setFixedSize(20, 20)
         # self.layout_plus_button.addWidget(self.button_smiley, alignment=Qt.AlignmentFlag.AlignRight)
 
@@ -1225,59 +1301,34 @@ class MainWindow(QMainWindow):
         self.layout_for_plus_and_send_button.addWidget(self.send_button, alignment=Qt.AlignmentFlag.AlignLeft)
 
         self.start_contenu = ""
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.get_contenu)
 
-        self.label_contacts = QLabel("<b>Contacts: </b>")
+        self.label_contacts = QLabel(f" Contacts: ")
+        self.label_contacts.setFont(QFont("arial", 11))
+        self.label_contacts.setStyleSheet("background-color:#4285c2;"
+
+                                          "color: white;")  # "border-radius: 3px;"
+        self.label_contacts.setContentsMargins(0, 5, 0, 5)
         self.layout.addWidget(self.label_contacts)
 
         self.list_contacts = QListView()
         self.list_contacts.setMaximumWidth(600)
         self.list_contacts.setStyleSheet("background: white;"
                                          "font-size: 16px;")
+
         self.layout.addWidget(self.list_contacts)
 
-        with open("contacts.txt", "r") as file:
-            data = file.read()
-            self.list_contacts_from_file = data.split("\n")
-            data = data.replace("\n", "")
-
-            self.list_contacts_affiche = data.split(";")
-
-        self.only_contacts_name = []
-
-        for i in range(0, len(self.list_contacts_affiche), 3):
-            print(len(self.list_contacts_affiche))
-            self.only_contacts_name.append(self.list_contacts_affiche[i])
-            print("only contact name", self.only_contacts_name)
-        self.only_contacts_name.pop()
-
-        model = QStandardItemModel()
-        self.list_contacts.setModel(model)
-
-        self.list_contacts.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-
-        self.list_contacts.doubleClicked.connect(self.fill_info_contact)
-
-        image_path = "img/contacts.png"
-
-        for i in self.only_contacts_name:
-            item = QStandardItem(i)
-            icon = QIcon(QPixmap(image_path))
-            item.setIcon(icon)
-            model.appendRow(item)
 
         theme_blue_button = """
                 QPushButton {
-                    background-color: #7099bf;
-                    color: #000000;
-                    border-radius:3px;
+                    background-color: #4285c2;
+                    color: #fafafa;
                     border: 1px solid #2f3235;
                     padding: 2px 5px;
+                    margin: 1px;
 
                 }
                 QPushButton:hover {
-                    background-color: #bababa;
+                    background-color: #437db1;
                 }
                 QPushButton:pressed {
                     background-color: #a8a8a8;
@@ -1295,15 +1346,16 @@ class MainWindow(QMainWindow):
         self.button_add_contact.setToolTip("add a contact to your contact list")
         self.button_add_contact.setStyleSheet("""
                 QPushButton {
-                    background-color: #7099bf;
-                    color: #000000;
-                    border-radius:3px;
+                    background-color: #4285c2;
+                    color: #fafafa;
+
                     border: 1px solid #2f3235;
                     padding: 5px 5px;
+                    margin: 1px;
 
                 }
                 QPushButton:hover {
-                    background-color: #bababa;
+                    background-color: #437db1;
                 }
                 QPushButton:pressed {
                     background-color: #a8a8a8;
@@ -1317,18 +1369,6 @@ class MainWindow(QMainWindow):
 
         self.layout_button_modif_delete = QHBoxLayout()
         self.layout.addLayout(self.layout_button_modif_delete)
-
-        self.button_modify_contact = QPushButton("Modify contact")
-        self.button_modify_contact.clicked.connect(self.show_modify_contact_windows)
-        self.layout_button_modif_delete.addWidget(self.button_modify_contact)
-        self.button_modify_contact.setStyleSheet(theme_blue_button)
-        self.button_modify_contact.setToolTip("Modify a contact by giving is name")
-
-        self.button_delete_contact = QPushButton("Delete contact")
-        self.button_delete_contact.clicked.connect(self.show_delete_contact_windows)
-        self.layout_button_modif_delete.addWidget(self.button_delete_contact)
-        self.button_delete_contact.setStyleSheet(theme_blue_button)
-        self.button_delete_contact.setToolTip("Delete a contact by giving is name")
 
         # Largeur fixe pour les labels
         label_width = 80
@@ -1450,6 +1490,16 @@ class MainWindow(QMainWindow):
         self.layout.addWidget(self.champ_public_key2)
         self.champ_public_key2.hide()
 
+        model = QStandardItemModel()
+        self.list_contacts.setModel(model)
+
+        self.list_contacts.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+
+        self.list_contacts.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.list_contacts.customContextMenuRequested.connect(self.show_context_menu)
+
+        self.list_contacts.doubleClicked.connect(self.fill_info_contact)
+
         self.counter = 0
 
         self.create_all_files()
@@ -1476,14 +1526,81 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     print(e)
 
-        with open("./parameters.txt", "r") as _file:
-            data = _file.read().split("\n")
-
-            for line in data:
-                if line.startswith("show_emoji_at:"):
-                    self.show_smiley = int(line.replace("show_emoji_at:", ""))
+        with open("./parameters.json", "rb") as _file:
+            data = _file.read().strip()
+            if data:
+                data = json.loads(data)
+                self.show_emoji = int(data['parameters']['show_emoji'])
 
         self.show_chat()
+
+
+
+
+    def show_context_menu(self, pos: QPoint):
+        index = self.list_contacts.indexAt(pos)
+        if not index.isValid():
+            return
+
+        row = index.row()
+        contact_name = index.data()
+
+        menu = QMenu(self)
+
+        action_info = QAction("Show info", self)
+        action_supprimer = QAction("Delete", self)
+        #action_cancel = QAction("Cancel", self)
+
+        action_info.triggered.connect(lambda: self.show_modify_contact_windows(contact_name))
+        action_supprimer.triggered.connect(lambda: self.delete_contact(contact_name))
+        #action_cancel.triggered.connect(lambda: None)
+
+        menu.addAction(action_info)
+        menu.addAction(action_supprimer)
+        #menu.addSeparator()
+        #menu.addAction(action_cancel)
+
+        # Affiche le menu à l'endroit du clic
+        menu.exec(self.list_contacts.viewport().mapToGlobal(pos))
+
+    def delete_contact(self, contact_name):
+        try:
+
+            yes_or_no = QMessageBox.question(self,
+                                             'Confirmation',
+                                             f'Do you really want to delete {contact_name} contact? ',
+                                             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                             QMessageBox.StandardButton.No)
+
+            if yes_or_no == QMessageBox.StandardButton.Yes:
+                print("in yes or no")
+
+                with open("./contacts.json", "r", encoding='utf-8') as file:
+                    data = json.loads(scrro.decrypt(self.password, file.read()))
+
+                for contact in data["contacts"]:
+                    if contact["name"] == contact_name:
+                        data["contacts"].remove(contact)
+                        break
+
+                with open("./contacts.json", "wb") as file:
+                    data = scrro.encrypt(self.password, json.dumps(data).encode())
+                    file.write(data)
+
+                try:
+                    shutil.rmtree(f"./chat_data/{contact_name}")
+                    print(f"Dossier './chat_data/{contact_name}' et tout son contenu ont été supprimés avec succès.")
+                except FileNotFoundError:
+                    print(f"Le dossier './chat_data/{contact_name}' n'existe pas.")
+                except PermissionError:
+                    print(f"Permission refusée pour supprimer le dossier './chat_data/{contact_name}'.")
+                except OSError as e:
+                    print(f"Erreur : {e}")
+
+                self.refresh_contact_list()
+
+        except Exception as e:
+            print(e)
 
     def copy_pub_key(self):
         pub = self.champ_public_key.text()
@@ -1493,13 +1610,23 @@ class MainWindow(QMainWindow):
         clipboard.setText(pub)
 
     def create_all_files(self):
+        defaults = {
+            "contacts.json": None,
+            "key_pair.txt": None,
+            "parameters.json": {
+                "parameters": {
+                    "show_emoji": 1,
+                    "last_contact": None
+                }
+            }
+        }
 
-        list_files = ["contacts.txt", "key_pair.txt", "parameters.txt"]
+        for filename, default_content in defaults.items():
+            if not os.path.exists(filename):
+                with open(filename, "w") as f:
+                    if filename.endswith(".json") and default_content is not None:
+                        json.dump(default_content, f, indent=4)
 
-        for i in range(len(list_files)):
-            if not os.path.exists(f"./{list_files[i]}"):
-                with open(f"./{list_files[i]}", 'w') as f:
-                    f.write("")
 
     def openFileNameDialog(self):
         options = QFileDialog.Options()
@@ -1528,7 +1655,7 @@ class MainWindow(QMainWindow):
 
             image_encrypt_for_sender = crro.encrypt(public_key_sender, reduced_quality_bytes)
 
-            image_signed = "__IMAGE__" + "\n" + image_encrypt + "\n" + image_encrypt_for_sender
+            image_signed = "__IMAGE__" + "\n" + image_encrypt + "__IMAGE__" + "\n" + image_encrypt_for_sender
 
             image_signed = crro.sign(private_key, image_signed.encode())
 
@@ -1547,13 +1674,17 @@ class MainWindow(QMainWindow):
             else:
                 file_name = hashlib.sha256(public_key_sender_for_file_name + public_key_for_file_name).hexdigest()
 
-            file_name = "crrochat_conversations" + "/" + file_name + ".txt"
-            self.url_send = self.champ_server.text() + "/send_messages.php"
 
-            data = {'contenu': image_signed.encode('utf-8') + b"\n\n", "file_name": file_name}
-            response_send = requests.post(self.url_send, data=data)
-            if response_send.status_code == 200:
-                print("image send!")
+            self.url_send = f"{self.champ_server.text()}/CrroChat/send_message.php"
+
+            data = {
+                "file_name": file_name,
+                "msg": image_signed
+            }
+
+            thread_send = threading.Thread(target=lambda: self.send_message_thread(data), daemon=True)
+            thread_send.start()
+
 
     def insert_smiley(self, smiley):
         unicode_code = smiley
@@ -1561,83 +1692,47 @@ class MainWindow(QMainWindow):
         # print(smiley, "U+1F600".decode())
         self.champ_message.insertPlainText(emoji)
 
-    @try_except
-    def show_smiley_funct(self):
+    
+    def show_emoji_funct(self):
 
-        if self.show_smiley == 1:
+
+        if self.show_emoji == 1:
             self.widget_button.hide()
-            self.show_smiley = 2
+            self.show_emoji = 2
         else:
             self.widget_button.show()
-            self.show_smiley = 1
-        with open("./parameters.txt", "r") as file:
-            data = file.read()
+            self.show_emoji = 1
+        with open("./parameters.json", "r") as file:
+            data = file.read().strip()
+            if data:
+                data = json.loads(data)
+                data['parameters']['show_emoji'] = self.show_emoji
 
-        lines = data.split("\n")
-        for line in lines:
-            if line.startswith("show_emoji_at:"):
-                print("find lines")
-
-                new_data = data.replace(line, "show_emoji_at:" + str(self.show_smiley))
-
-                with open("./parameters.txt", "w") as file:
-                    file.write(new_data)
+        with open("./parameters.json", "w") as file:
+            json.dump(data, file, indent=4)
 
 
-    @try_except
-    def initDownload(self, url_path):
-
-        print("in init download")
-
-        print(url_path)
-
-        self.downloader = Downloader(
-            url_path
-        )
-
-        @try_except
-        def downloadFinished(content):
-            try:
-                # Print the content of the file.
-                # print("content in download finish", content.decode())  # Assuming content is in bytes
-                self.content = content.decode()
-
-                # Delete the thread when no longer needed.
-                # self.downloader.deleteLater() #Use this line only on Windows OS
-
-                QTimer.singleShot(1000, self.get_contenu)
-            except Exception as e:
-                print(e)
-
-        print("after download")
-        # Qt will invoke the `downloadFinished()` method once the
-        # thread has finished.
-        self.downloader.contentReady.connect(downloadFinished)
-
-        self.downloader.start()
-
-        # content = self.downloader.getcontent()
-
-        return self.content
-
-    @try_except
+    
     def refresh_contact_list(self):
-        with open("contacts.txt", "r") as file:
+        with open("./contacts.json", "rb") as file:
             data = file.read()
-            self.list_contacts_from_file = data.split("\n")
-            self.list_contacts_from_file.pop()
-            data = data.replace("\n", "")
+            if not data:
+                return
+            data = json.loads(scrro.decrypt(self.password, data))
 
-            self.list_contacts_affiche = data.split(";")
+
+        list_names = []
+
+        for contact in data["contacts"]:
+            list_names.append(contact["name"])
 
         self.only_contacts_name = []
 
-        for i in range(0, len(self.list_contacts_affiche), 3):
-            self.only_contacts_name.append(self.list_contacts_affiche[i])
+        for name in list_names:
+            self.only_contacts_name.append(name)
 
         model = QStandardItemModel()
         image_path = "img/contacts.png"
-        self.only_contacts_name.pop()
 
         for i in self.only_contacts_name:
             item = QStandardItem(i)
@@ -1656,59 +1751,74 @@ class MainWindow(QMainWindow):
             self.see = True
             self.champ_private_key.setEchoMode(QLineEdit.EchoMode.Password)
 
-    @try_except
+    
     def fill_info_contact(self, index, start=False):
-        if start == False:
-
+        if not start:
             contact_index = index.row()
-            if 0 <= contact_index < len(self.list_contacts_affiche):
-                print("list contact affiche", self.list_contacts_affiche)
-                name = self.list_contacts_affiche[contact_index * 3]
-                server_contact = self.list_contacts_affiche[contact_index * 3 + 1]
-                public_key = self.list_contacts_affiche[contact_index * 3 + 2]
-                print("contact-index", contact_index)
-                print("public key", public_key)
-                print("server_contact", server_contact)
-                # self.text_edit.clear(Mask())
+            with open("contacts.json", "rb") as file:
+                data = file.read()
+            if data:
+                data = scrro.decrypt(self.password, data)
+                contacts = json.loads(data)
+                contact = contacts["contacts"][contact_index]
+
+                self.current_contact_name = contact["name"]
+                server_contact = contact["server"]
+                public_key = contact["public_key"]
                 self.champ_public_key2.setText(public_key)
                 self.champ_server.setText(server_contact)
                 self.model.clear()
                 self.start_contenu = ""
-                self.champ_name_contact.setText(name)
-                self.name_contact = name
-                self.label_name_current.setText(f" Chat with: {self.name_contact}")
+                self.champ_name_contact.setText(self.current_contact_name)
+                self.label_name_current.setText(f" Chat with: {self.current_contact_name}")
                 self.show_chat()
                 self.fill_server_info()
-                # self.get_contenu(start=True)
                 self.counter = 1
                 self.model.clear()
 
-                with open("parameters.txt", "w") as file:
-                    file.write(name + ";" + server_contact + ";" + public_key + ";"+"\nshow_emoji_at:" + str(self.show_smiley))
-        else:
-            # if 2 == 1:
-            with open("parameters.txt", "r") as file:
-                list_contacts_affiche = file.read()
+                temp_data = json.dumps({"contact_name": self.current_contact_name, "server": server_contact, "public_key": public_key}).encode()
 
-            print("list contact affiche", list_contacts_affiche)
-            list_contacts_affiche = list_contacts_affiche.split(";")
-            name = list_contacts_affiche[0]
-            server_contact = list_contacts_affiche[1]
-            public_key = list_contacts_affiche[2]
-            print("public key", public_key)
-            print("server_contact", server_contact)
-            # self.text_edit.clear(Mask())
+                encrypted_data = scrro.encrypt(self.password, temp_data).decode('utf-8')
+
+                with open("parameters.json", "r") as file:
+                    content = file.read().strip()
+
+                    if content:
+                        file.seek(0)
+                        data = json.load(file)
+                        data['parameters']['last_contact'] = encrypted_data
+
+
+                with open("parameters.json", "w") as file:
+                    json.dump(data, file, indent=4)
+
+
+
+                self.change_contact()
+                self.show_messages_from_client_data_chat()
+        else:
+
+            with open("parameters.json", "r") as file:
+                content = file.read().strip()
+                if content:
+                    file.seek(0)
+                    data = json.load(file)
+                    decrypted_data = scrro.decrypt(self.password, data['parameters']['last_contact'])
+                    last_contact = json.loads(decrypted_data)
+
+            self.current_contact_name = last_contact['contact_name']
+            server_contact = last_contact['server']
+            public_key = last_contact['public_key']
             self.champ_public_key2.setText(public_key)
             self.champ_server.setText(server_contact)
             self.model.clear()
             self.start_contenu = ""
-            self.champ_name_contact.setText(name)
-            self.name_contact = name
-            self.label_name_current.setText(f" Chat with: {self.name_contact}")
+            self.champ_name_contact.setText(self.current_contact_name)
+            self.label_name_current.setText(f" Chat with: {self.current_contact_name}")
             self.show_chat()
             self.fill_server_info()
-            # self.get_contenu(start=True)
-            # self.show_chat()
+
+
 
     """
     def closeEvent(self, event):
@@ -1720,103 +1830,95 @@ class MainWindow(QMainWindow):
             if line.startswith("show_emoji_at:"):
                 print("find lines")
 
-                new_data = data.replace(line, "show_emoji_at:" + str(self.show_smiley))
+                new_data = data.replace(line, "show_emoji_at:" + str(self.show_emoji))
 
                 with open("./parameters.txt", "w") as file:
                     file.write(new_data)
         print("The close is clean")"""
 
-    @try_except
+    def closeEvent(self, event):
+        self.process.terminate()
+        print("The close is clean")
+
+    
     def send_message(self, another=None):
-
         try:
-
             print("another lolol", another)
         except Exception as e:
             print(e)
 
-        self.text_edit.scrollToBottom()
 
+
+        #self.text_edit.scrollToBottom()
         message_plaintext = str(self.champ_message.toPlainText())
 
         if not message_plaintext.strip():
             return
 
+        self.champ_message.clear()
+
+        self.play_sound_send_signal.emit()
+
         public_key = str(self.champ_public_key.text())
-
         public_key_sender = str(self.champ_public_key2.text())
-
         private_key = self.champ_private_key.text()
         private_key_int = int.from_bytes(base64.urlsafe_b64decode(private_key), byteorder='big')
-
-        identifier = hashlib.sha256(public_key.encode()).hexdigest()
+        # identifier = hashlib.sha256(public_key.encode()).hexdigest()
 
         try:
-
-            derivated_key = hashlib.sha256(private_key.encode()).digest()
-
             public_key = eval(public_key)
             public_key_sender = eval(public_key_sender)
-            print("public_key", public_key_sender)
-
             name = str(self.champ_nom.text())
-
             time = datetime.now()
-
             time = time.strftime("%Y-%m-%d %H:%M")
-            print(time)
 
             message_plaintext = f"              {time}" + "\n" + name + ":\n" + message_plaintext
-
             message = crro.encrypt(public_key_sender, message_plaintext.encode())
-
             message_for_sender = crro.encrypt(public_key, message_plaintext.encode())
-
             message = message + "\n" + message_for_sender
-
-            message = identifier + "\n" + message
-
             message_signed = crro.sign(private_key_int, message.encode())
 
             if not message.strip():
                 return
 
             public_key_for_x = self.champ_public_key.text().replace("(", "").split(",")
-
             public_key_sender_for_x = self.champ_public_key2.text().replace("(", "").split(",")
-
             public_key_for_file_name = str(self.champ_public_key.text()).encode()
-
             public_key_sender_for_file_name = str(self.champ_public_key2.text()).encode()
-
             x = int(public_key_for_x[0])
-
-            print("x", x)
-
             x_sender = int(public_key_sender_for_x[0])
-
-            print("x_sender", x_sender)
 
             if x_sender < x:
                 file_name = hashlib.sha256(public_key_for_file_name + public_key_sender_for_file_name).hexdigest()
             else:
                 file_name = hashlib.sha256(public_key_sender_for_file_name + public_key_for_file_name).hexdigest()
 
-            file_name = "crrochat_conversations" + "/" + file_name + ".txt"
+            self.url_send = f"{self.champ_server.text()}/CrroChat/send_message.php"
 
-            self.url_send = self.champ_server.text() + "/send_messages.php"
+            data = {
+                "file_name": file_name,
+                "msg": message_signed.encode('utf-8') + b"\n\n"
+            }
 
-            data = {'contenu': message_signed.encode('utf-8') + b"\n\n", "file_name": file_name}
-            response_send = requests.post(self.url_send, data=data)
-            if response_send.status_code == 200:
-                self.champ_message.clear()
-                self.fill_server_info()
+            self.url_send = f"{self.champ_server.text()}/CrroChat/send_message.php"
 
-                print("Contenu ajouté avec succès.")
-            else:
-                print("La requête a échoué. Code de statut:", response_send.status_code)
+            thread_send = threading.Thread(target=lambda: self.send_message_thread(data), daemon=True)
+            thread_send.start()
+            #QTimer.singleShot(0, self.text_edit.scrollToBottom)
+
+
         except Exception as e:
             print(e)
+
+    
+    def send_message_thread(self, data):
+        response_send = requests.post(self.url_send, data=data)
+        print("response_send", response_send.json())
+        if response_send.status_code == 200:
+            self.fill_server_info()
+            print("Contenu ajouté avec succès.")
+        else:
+            print("Error", response_send.status_code)
 
     def scroll_to_bottom_manual(self):
         self.text_edit.scrollToBottom()
@@ -1859,405 +1961,198 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(e)
 
-    @try_except
-    def get_contenu(self, start=False):
 
-        print("actual time", time.time() - start_time)
 
+    
+    def change_contact(self):
+        if hasattr(self, "process") and self.process is not None:
+            if self.process.is_alive():
+                self.process.terminate()
+                self.process.join()
+            self.process = None
+
+        self.stop_event.set()
         public_key_for_x = self.champ_public_key.text().replace("(", "").split(",")
-
         public_key_sender_for_x = self.champ_public_key2.text().replace("(", "").split(",")
-
         public_key_for_file_name = str(self.champ_public_key.text()).encode()
-
         public_key_sender_for_file_name = str(self.champ_public_key2.text()).encode()
-
-        server = self.champ_server.text()
-
+        url = self.champ_server.text()
         x = int(public_key_for_x[0])
-
-        print("x", x)
-
         x_sender = int(public_key_sender_for_x[0])
-
-        print("x_sender", x_sender)
-
         if x_sender < x:
             file_name = hashlib.sha256(public_key_for_file_name + public_key_sender_for_file_name).hexdigest()
         else:
             file_name = hashlib.sha256(public_key_sender_for_file_name + public_key_for_file_name).hexdigest()
 
-        print("file name :", file_name)
+        self.stop_event.clear()
 
-        url_path = server + "/" + "crrochat_conversations" + "/"+ file_name + ".txt"
+        print("file_name", file_name)
 
-        print("url_path: ", url_path)
+        self.process = Process(target=long_poll, args=(file_name, url, self.queue))
+        self.process.start()
 
-        response = self.initDownload(url_path)
+    def get_message(self):
+        last_timestamp = 0
+        if self.current_contact_name:
+            dir_path = f"./chat_data/{self.current_contact_name}"
+            with open(f"{dir_path}/last_message", "r", encoding="utf-8") as file:
+                content = file.read().strip()
+                if content:
+                    last_message = json.loads(content)
+                    last_timestamp = last_message['timestamp']
 
-        print("pass exacption")
+        while True:
+            msg = self.queue.get()
+            timestamp = msg['timestamp']
+            print("timestamp > last_timestamp", timestamp, last_timestamp)
+            if timestamp > last_timestamp:
+                # self.play_sound_signal.emit() # if you want to always have notif sound when getting a message
+                self.decrypt_show_and_save_message(msg['msg'], f"./chat_data/{self.current_contact_name}/client_chat_data")
+                with open(f"./chat_data/{self.current_contact_name}/last_message", "w", encoding="utf-8") as file:
+                    json.dump(msg, file)
+                last_timestamp = timestamp
 
-        if self.counter < 3:
-            self.counter += 1
-
-        if self.counter == 2:
-            print("after start")
-
-            # self.get_contenu(start=True) #here the crash problem
-
-            self.text_edit.scrollToBottom()
-
-        name = self.champ_name_contact.text()
-
-        if self.counter == 1:
-            self.model.add_message(USER_ME, 'please wait loading...        ')
-
-        # if start == True:
-        if self.counter == 2:
-            print("start = True", start)
-
-            self.model.clear()
-
-            with open(f"./chat_data/{name}/chat_data.txt", "r") as file:
-                data = file.read()
-                password = self.password
-                data = scrro.decrypt(password, data).decode()
-
-                print("data from scrro", data)
-                # all_data = ""
-                self.all_data = data
-
-            # print("data from chat_data", data)
-            try:
-
-                data = data.split("---End_Message---")
-                # print("data: ", data)
-            except Exception as e:
-                print(e)
-
-            try:
-
-                for i in range(0, len(data)):
-
-                    print(f"data in range{i}", data[i])
-
-                    if "---Your_Message---" in data[i]:
-
-                        self.model.add_message(USER_ME, data[i].replace("---Your_Message---", ""))
-                        print("Your_Message")
-                    elif "---Them_Message---" in data[i]:
-
-                        self.model.add_message(USER_THEM, data[i].replace("---Them_Message---", ""))
-                        print("Them_Message")
-                    elif "---Your_Image---" in data[i]:
-
-                        # message = base64.urlsafe_b64decode(data[i].replace("---Your_Image---", ""))
-
-                        message = base64.urlsafe_b64decode(data[i].replace("---Your_Image---", ""))
-
-                        print("base64 decode message", message)
-
-                        # message = message[2:-1]
-                        # Utiliser codecs.escape_decode pour convertir la chaîne en bytes
-                        # message, _ = codecs.escape_decode(message)
-
-                        self.model.add_message(USER_ME, image_bytes=message)
-                        print("Your_Image")
-
-                    elif "---Them_Image---" in data[i]:
-
-                        # message = base64.urlsafe_b64decode(data[i].replace("---Your_Image---", ""))
-
-                        message = base64.urlsafe_b64decode(data[i].replace("---Them_Image---", ""))
-
-                        print("base64 decode message", message)
-
-                        # message = message[2:-1]
-                        # Utiliser codecs.escape_decode pour convertir la chaîne en bytes
-                        # message, _ = codecs.escape_decode(message)
-
-                        self.model.add_message(USER_THEM, image_bytes=message)
-                        print("Them_Image")
-                    else:
-                        print("don't know who send that")
-
-                with open(f"./chat_data/{name}/encrypt_data.txt", "r") as file:
-                    data_file = file.read()
-
-                    self.start_contenu = data_file
-
-                # print("data_file", data_file)
-
-            except Exception as e:
-                print("in start", e)
-
-        if "Error during connexion" in self.champ_server.text():
-            return
-
-        print("im here")
-
-        # if scroll == True:
-
-        # self.text_edit.scrollToBottom()
-
-        try:
-
-            print("response url open", "End response url open")
-        except Exception as e:
-            with open("parameters.txt", "r") as file:
-                if file.read().strip():
-                    self.champ_server.setText(f"Error during connexion to: {self.url_contenu} ")
-                    QMessageBox.warning(self, 'Error during connexion', f"Error during connexion to the server: {e}")
-                    return
-                else:
-                    print("in else")
-                    return
-
-        if response:
-
-            print("response == 200")
-
-            contenu_actuel_chiffrer = response
-
-            pattern = re.compile(r'---BEGIN SIGNED CRRO MESSAGE---(.*?)---END SIGNED CRRO MESSAGE---', re.DOTALL)
-
-            all_messages = []
-
-            # if start == True:
-            # start_contenu = self.start_contenu
-            # print("im in start = True",start)
-            # contenu_actuel_chiffrer_extract = contenu_actuel_chiffrer
             # self.text_edit.scrollToBottom()
 
-            print("im in start = False")
-            start_contenu = self.start_contenu
-
-            print("contenu_actuel_chiffrer", contenu_actuel_chiffrer)
-            print("self.start_contenu", self.start_contenu)
-
-            if contenu_actuel_chiffrer != self.start_contenu:
-
-                contenu_actuel_chiffrer_extract = self.extract_new_messages(start_contenu, contenu_actuel_chiffrer)
-
-                print("contenu not same")
-
-                # Trouver le premier message correspondant
-                match = pattern.search(contenu_actuel_chiffrer_extract)
-
-                private_key = self.champ_private_key.text()
-
-                public_key = eval(str(self.champ_public_key2.text()))
-
-                personal_public_key = self.champ_public_key.text().replace("(", "").replace(")", "")
-
-                personal_public_key = personal_public_key.split(",")
-
-                int_x = int(personal_public_key[0])
-                int_y = int(personal_public_key[1])
-
-                personal_public_key = int_x, int_y
-
-                # name = self.cham
-
-                personal_public_key_for_hash = str(self.champ_public_key.text())
-
-                private_key = int.from_bytes(base64.urlsafe_b64decode(private_key), byteorder="big")
-                # print("private_key base64 decode", private_key)
-                # print("we are in!", contenu_actuel_chiffrer_extract)
-
-                chat_data = []
-
-                name = self.champ_name_contact.text()
-
-                with open(f"./chat_data/{name}/encrypt_data.txt", "w") as file:
-                    if not "404 Not Found" in contenu_actuel_chiffrer:
-                        file.write(contenu_actuel_chiffrer)
-
-                contenu_actuel = contenu_actuel_chiffrer_extract
-
-                # Tant qu'il y a des correspondances
-
-                password = self.password
-
-                while match:
-                    # if 1==1:
-                    try:
-
-                        # Récupérer le message avec les balises
-                        message = "---BEGIN SIGNED CRRO MESSAGE---" + match.group(1) + "---END SIGNED CRRO MESSAGE---"
-
-                        # print("Message:")
-                        # print(message)
-
-                        message_encrypt = str(message)
-
-                        try:
-
-                            sign_yes_or_no, message_only = crro.verify_signature(public_key, message_encrypt)
-
-                        except Exception as e:
-                            print("error when verify_signature", e)
-
-                        print("sign_yes_or_no", sign_yes_or_no)
-
-                        if sign_yes_or_no == True:
-                            print("Message encode:", message_only)
-
-                            if "__IMAGE__" in message_only:
-                                print("an image was found")
-                                message_only = message_only
-                                try:
-                                    message = crro.decrypt(private_key, message_only)
-
-                                    # message = message[2:-1]
-                                    # Utiliser codecs.escape_decode pour convertir la chaîne en bytes
-                                    # message, _ = codecs.escape_decode(message)
-
-                                except Exception as e:
-                                    match = pattern.search(contenu_actuel, match.end())
-                                    print("Signature valid but decryption failed the message is pass", e)
-                                    continue
-
-                                self.all_data = self.all_data + "---Them_Image---" + base64.urlsafe_b64encode(
-                                    message).decode() + "---End_Message---"
-
-                                self.model.add_message(USER_THEM, image_bytes=message)
-                            else:
-
-                                try:
-                                    print("in 2")
-                                    message = crro.decrypt(private_key, message_only).decode()
-
-                                except Exception as e:
-                                    match = pattern.search(contenu_actuel, match.end())
-                                    print("Signature valid but decryption failed the message is pass")
-                                    continue
-
-                                # print("message", message)
-
-                                message = str(message)
-
-                                # print("decypted message", message)
-
-                                # Ajouter le message au champ de texte
-                                # all_messages.append(message)
-
-                                self.all_data = self.all_data + "---Them_Message---" + message + "---End_Message---"
-
-                                self.model.add_message(USER_THEM, message)
-
-                            # Trouver le prochain message correspondant
-                            match = pattern.search(contenu_actuel, match.end())
-
-
-
-
-                        else:
-                            # print("personal_public_key", personal_public_key, "    message", message)
-
-                            try:
-
-                                sign_yes_or_no, message = crro.verify_signature(personal_public_key, message)
-                            except Exception as e:
-                                print(e)
-                            print("message after signature verify and sign:", sign_yes_or_no, message)
-
-                            if sign_yes_or_no == True:
-                                message = message.split("---BEGIN CRRO MESSAGE---")
-                                print("Message encode[0] :", message[0])
-
-                                if "__IMAGE__" in message[0]:
-                                    print("in if begin Image")
-                                    # print("message[2]", message[2])
-                                    # print("private_key", private_key)
-                                    # print("all data image", "---BEGIN CRRO MESSAGE---" + message[2])
-
-                                    try:
-                                        message = crro.decrypt(private_key,
-                                                               "---BEGIN CRRO MESSAGE---" + message[2])  # .decode()
-
-                                        # message = decode_base64_to_pixmap(message)
-
-                                        # print("reduced_quality_bytes after ",message)
-
-                                        # Je n'utilise plus les codec mais garde les lignes dans le doute d'un changement de protocol
-                                        # message = message[2:-1]
-                                        # Utiliser codecs.escape_decode pour convertir la chaîne en bytes
-                                        # message, _ = codecs.escape_decode(message)
-
-
-                                    except Exception as e:
-                                        match = pattern.search(contenu_actuel, match.end())
-                                        print("Signature valid but decryption failed the message is pass", e)
-                                        continue
-
-                                    self.all_data = self.all_data + "---Your_Image---" + base64.urlsafe_b64encode(
-                                        message).decode() + "---End_Message---"
-
-                                    print("Image bytes: ", message)
-
-                                    self.model.add_message(USER_ME, image_bytes=message)
-                                else:
-
-                                    try:
-                                        message = crro.decrypt(private_key,
-                                                               "---BEGIN CRRO MESSAGE---" + message[2]).decode()
-
-                                    except Exception as e:
-                                        print("error: ", e)
-                                        match = pattern.search(contenu_actuel, match.end())
-                                        print("Signature valid but decryption failed the message is pass")
-                                        continue
-
-                                    # print("message", message)
-
-                                    message = str(message)
-
-                                    # print("decypted message", message)
-
-                                    # Ajouter le message au champ de texte
-                                    # all_messages.append(message)
-
-                                    self.all_data = self.all_data + "---Your_Message---" + message + "---End_Message---"
-
-                                    self.model.add_message(USER_ME, message)
-
-                                # Trouver le prochain message correspondant
-                                match = pattern.search(contenu_actuel, match.end())
-
-
-                            else:
-                                match = pattern.search(contenu_actuel, match.end())
-
-                    except Exception as e:
-                        print("error during get contenu", e)
-
-                        # Mettre à jour le contenu affiché dans le champ de texte à la fin
-                        # contenu_actuel = "".join(all_messages)
-
-                    try:
-
-                        # print("contenu actuel", contenu_actuel)
-
-                        print("self.all_data", self.all_data)
-
-                        self.start_contenu = contenu_actuel_chiffrer
-                    except Exception as e:
-                        print("error during after get contenu", e)
-
-                if self.all_data.strip():
-                    print("all data ", self.all_data, "End all data")
-                    with open(f"./chat_data/{name}/chat_data.txt", "w") as file:
-                        print("here")
-
-                        print("or here?")
-                        print(password)
-                        encrypted_data = scrro.encrypt(password, str(self.all_data).encode()).decode()
-                        print("or over here ?")
-
-                        file.write(encrypted_data)
-
-                print("we are out!")
+    def add_message_to_client_chat_data(self, new_message, file_path):
+
+        with open(file_path, "r", encoding='utf-8') as file:
+            data = file.read()
+            if data:
+                data = scrro.decrypt(self.password, data)
+                client_chat_data = json.loads(data)
+            else:
+                client_chat_data = {
+                    "messages": []
+                }
+
+        #with open(file_path, "r", encoding="utf-8") as file:
+            #client_chat_data = json.load(file)
+        client_chat_data["messages"].append(new_message)
+
+        # we only keep the 512 last messages to keep the file size resonalbe
+        client_chat_data["messages"] = client_chat_data["messages"][-512:]
+
+        #with open(file_path, "w", encoding="utf-8") as file:
+            #json.dump(client_chat_data, file, ensure_ascii=False, indent=4)
+
+        with open(file_path, "wb") as file:
+            data = scrro.encrypt(self.password, json.dumps(client_chat_data).encode())
+            file.write(data)
+
+    def show_messages_from_client_data_chat(self):
+        if not self.current_contact_name:
+            return
+
+        with open(f"./chat_data/{self.current_contact_name}/client_chat_data", "r", encoding='utf-8') as file:
+            try:
+                decrypted = scrro.decrypt(self.password, file.read())
+                chat_data = json.loads(decrypted)
+            except (ValueError, JSONDecodeError):
+                return
+
+        self.text_edit.setMaximumWidth(450)  # avoid bad resizing
+
+        # reduit le nombre de lookup a faire ?
+        add = self.model.add_message
+        b64decode = base64.urlsafe_b64decode
+
+        for message in chat_data['messages']:
+            if message['to'] == 'me_img':
+                add(USER_ME, image_bytes=b64decode(message["msg"]))
+            elif message['to'] == "them_img":
+                add(USER_THEM, image_bytes=b64decode(message["msg"]))
+            elif message['to'] == "me":
+                add(USER_ME, message["msg"])
+            elif message['to'] == "them":
+                add(USER_THEM, message["msg"])
+
+        self.text_edit.setMaximumWidth(600)
+        self.scroll_to_bottom()
+
+    def decrypt_show_and_save_message(self, message, file_path):
+        private_key = int.from_bytes(base64.urlsafe_b64decode(self.champ_private_key.text()), byteorder="big")
+        public_key = eval(str(self.champ_public_key2.text()))
+        personal_public_key = self.champ_public_key.text().replace("(", "").replace(")", "")
+        personal_public_key = personal_public_key.split(",")
+        int_x = int(personal_public_key[0])
+        int_y = int(personal_public_key[1])
+        personal_public_key = int_x, int_y
+
+        sign_true, message_only = crro.check_signature(personal_public_key, message)
+        message_list = message_only.split("---BEGIN CRRO MESSAGE---")
+
+        if sign_true:
+
+            encrypted_message = "---BEGIN CRRO MESSAGE---" + message_list[2]
+
+            #if "__IMAGE__" in encrypted_message:
+            if message_list[0].strip() == "__IMAGE__":
+                print("an image was found")
+                message = crro.decrypt(private_key, encrypted_message)
+                print(message)
+                b64_message = base64.urlsafe_b64encode(
+                    message).decode()
+                self.all_data = self.all_data + "---Them_Image---" + b64_message + "---End_Message---"
+                self.model.add_message(USER_ME, image_bytes=message)
+                new_message = {"to": "me_img", "msg": b64_message}
+                #self.play_sound_send_signal.emit() # play when button press
+                self.add_message_to_client_chat_data(new_message, file_path)
+                self.scroll_to_bottom()
+
+            else:
+                message = crro.decrypt(private_key, encrypted_message).decode()
+                message = str(message)
+                self.all_data = self.all_data + "---Them_Message---" + message + "---End_Message---"
+                self.model.add_message(USER_ME, message)
+                new_message = {"to": "me", "msg": message}
+                #self.play_sound_send_signal.emit() # play when button press
+                self.add_message_to_client_chat_data(new_message, file_path)
+                self.scroll_to_bottom()
+
+
+
+
+        else:
+            sign_true, message_only = crro.check_signature(public_key, message)
+            if sign_true:
+                if message_list[0].strip() == "__IMAGE__":
+                    print("an image was found")
+                    message = crro.decrypt(private_key, message_only)
+                    b64_message = base64.urlsafe_b64encode(
+                        message).decode()
+                    self.all_data = self.all_data + "---Them_Image---" + b64_message + "---End_Message---"
+                    self.model.add_message(USER_THEM, image_bytes=message)
+                    new_message = {"to": "them_img", "msg": b64_message}
+                    self.play_sound_get_signal.emit()
+                    self.add_message_to_client_chat_data(new_message, file_path)
+                    self.scroll_to_bottom()
+                else:
+                    message = crro.decrypt(private_key, message_only).decode()
+                    self.all_data = self.all_data + "---Them_Message---" + message + "---End_Message---"
+                    self.model.add_message(USER_THEM, message)
+                    new_message = {"to": "them", "msg": message}
+                    self.play_sound_get_signal.emit()
+                    self.add_message_to_client_chat_data(new_message, file_path)
+
+                    self.scroll_to_bottom()
+
+
+
+    def scroll_to_bottom(self):
+        model = self.text_edit.model()
+
+        row_count = model.rowCount(QModelIndex())
+        if row_count > 0:
+            last_index = model.index(row_count - 1, 0)
+
+            self.text_edit.scrollTo(last_index, QAbstractItemView.ScrollHint.PositionAtTop)
+
+            # Normalement pas besoin de sélectionner cet élément a voir sur linux
+            #selection_model = self.text_edit.selectionModel()
+            #selection_model.select(last_index, QItemSelectionModel.SelectionFlag.ClearAndSelect)
+
+            self.text_edit.setCurrentIndex(last_index)
 
     def save_keys(self, key):
 
@@ -2275,13 +2170,14 @@ class MainWindow(QMainWindow):
                 encrypted_key = "no encryption: " + str(base64.urlsafe_b64encode(private_key).decode())
                 encrypted_name = str(name.decode())
             else:
-                encrypted_key = scrro.encrypt(key, private_key, padding=False).decode()
+                encrypted_key = scrro.encrypt(key, private_key).decode()
                 encrypted_name = scrro.encrypt(key, name).decode()
+                print("key_", key)
 
             encrypted_name_and_keys = encrypted_key + "\n" + encrypted_name + "\n" + public_key
             file.write(encrypted_name_and_keys)
 
-    @try_except
+    
     def first_time(self, password, name):
         self.champ_nom.setText(name)
         self.generate_keys_first_time()
@@ -2293,16 +2189,19 @@ class MainWindow(QMainWindow):
         # mon_thread.start()
 
         self.save_keys(password)
+        self.password = password
+        self.access_key(password, start=True)
 
-    def show_elg256_windows(self,action=None):
+    def show_elg256_windows(self, action=None):
         elg256 = By_Elg256(self)
         elg256.exec()
 
-    def show_about_windows(self,action=None):
+    def show_about_windows(self, action=None):
         about = About(self)
         about.exec()
-    @try_except
-    def show_donation_bitcoin_windows(self,action=None):
+
+    
+    def show_donation_bitcoin_windows(self, action=None):
         bitcoin = Bitcoin_donation(self)
         bitcoin.exec()
 
@@ -2317,21 +2216,17 @@ class MainWindow(QMainWindow):
         get_password.exec()
 
     def show_contact_windows(self, start):
-        get_contact = Get_Contact(self)
+        get_contact = Get_Contact(self, self.password)
         get_contact.exec()
 
-    def show_modify_contact_windows(self, start):
-        mod_contact = Mod_Contact(self)
-        mod_contact.exec()
-
-    def show_delete_contact_windows(self, start):
-        del_contact = Del_Contact(self)
-        del_contact.exec()
-
-    def show_password_windows_save(self,action=None):
+    def show_password_windows_save(self, action=None):
         for_what = "save"
         get_password = Get_Passord(self, for_what)
         get_password.exec()
+
+    def show_modify_contact_windows(self, contact_name):
+        mod_contact = Mod_Contact(self, contact_name, self.password)
+        mod_contact.exec()
 
     def get_contenu_in_thread(self):
         self.fill_server_info()
@@ -2340,6 +2235,7 @@ class MainWindow(QMainWindow):
     def access_key(self, key, start=False, password=True):
 
         self.password = key
+        self.refresh_contact_list()
         print("in access")
 
         print(key)
@@ -2347,62 +2243,71 @@ class MainWindow(QMainWindow):
 
             encrypted_name_and_keys = file.read()
 
-            encrypted_key, encrypted_name, public_key = encrypted_name_and_keys.split("\n")
+        encrypted_key, encrypted_name, public_key = encrypted_name_and_keys.split("\n")
 
-            print("encrypted_private_key", encrypted_key)
+        print("encrypted_private_key", encrypted_key)
 
-            print("encrypted_name", encrypted_name)
+        print("encrypted_name", encrypted_name)
 
-            print("public_key", public_key)
+        print("public_key", public_key)
 
-            if password == True:
+        if password == True:
 
-                # encrypted_key = base64.urlsafe_b64decode(encrypted_key)
+            # encrypted_key = base64.urlsafe_b64decode(encrypted_key)
 
-                # encrypted_name = base64.urlsafe_b64decode(encrypted_name)
-                # try:
+            # encrypted_name = base64.urlsafe_b64decode(encrypted_name)
+            # try:
 
-                decrypted_private_key = scrro.decrypt(key, encrypted_key, padding=False)
+            decrypted_private_key = scrro.decrypt(key, encrypted_key)
 
-                decrypted_name = scrro.decrypt(key, encrypted_name)
+            decrypted_name = scrro.decrypt(key, encrypted_name)
 
-                self.champ_private_key.setText(base64.urlsafe_b64encode(decrypted_private_key).decode())
-                self.champ_public_key.setText(public_key)
-                self.champ_nom.setText(decrypted_name.decode())
+            self.champ_private_key.setText(base64.urlsafe_b64encode(decrypted_private_key).decode())
+            self.champ_public_key.setText(public_key)
+            self.champ_nom.setText(decrypted_name.decode())
 
-            else:
-                encrypted_key = encrypted_key.replace("no encryption: ", "")
-                self.champ_private_key.setText(encrypted_key)
-                self.champ_public_key.setText(public_key)
-                self.champ_nom.setText(encrypted_name)
+        else:
+            encrypted_key = encrypted_key.replace("no encryption: ", "")
+            self.champ_private_key.setText(encrypted_key)
+            self.champ_public_key.setText(public_key)
+            self.champ_nom.setText(encrypted_name)
 
-            if start == True:
-                print("starr=True", start)
+        if start == True:
+            print("starr=True", start)
 
-                with open("parameters.txt", "r") as file:
-                    data = file.read()
-                    data = data.split(";")
+            with open("parameters.json", "r") as file:
+                content = file.read().strip()
+                if content:
+                    file.seek(0)
+                    data = json.load(file)
 
-                try:
-                    # self.champ_name_contact.setText(data[0])
-                    # self.champ_server.setText(data[1])
-                    # self.champ_public_key2.setText(data[2])
-                    # self.label_name_current.setText(f" Chat with: {data[0]}")
-                    # self.get_contenu(start=True)
-                    self.fill_info_contact(index=0, start=True)
+                    if data['parameters']['last_contact'].strip():
 
-                except Exception as e:
-                    print("last contact seems None", e)
+                        try:
+                            # self.champ_name_contact.setText(data[0])
+                            # self.champ_server.setText(data[1])
+                            # self.champ_public_key2.setText(data[2])
+                            # self.label_name_current.setText(f" Chat with: {data[0]}")
+                            # self.get_contenu(start=True)
+                            self.fill_info_contact(index=0, start=True)
 
-                self.get_contenu(start=True)  # initialy with a start = True
+                        except Exception as e:
+                            print("last contact seems None", e)
 
+                        # self.get_contenu(start=True)  # initialy with a start = True
+                        self.change_contact()
 
-            else:
+            self.thread = threading.Thread(target=self.get_message, daemon=True)
+            print("The search thread is now start and only one of this message should be print")
+            self.thread.start()
 
-                print("starr False", start)
+        else:
 
-    @try_except
-    def generate_keys(self,action=None):
+            self.show_messages_from_client_data_chat()
+            print("self.show_messages_from_client_data_chat()")
+
+    
+    def generate_keys(self, action=None):
 
         yes_or_no = QMessageBox.question(self,
                                          'Confirmation',
@@ -2426,7 +2331,7 @@ class MainWindow(QMainWindow):
         else:
             return
 
-    @try_except
+    
     def generate_keys_first_time(self, action=None):
 
         self.private_key = crro.generate_private_key()
@@ -2438,7 +2343,7 @@ class MainWindow(QMainWindow):
         self.champ_private_key.setText(base64.urlsafe_b64encode(self.private_key).decode())
         self.champ_public_key.setText(str(self.public_key))
 
-    @try_except
+    
     def show_chat(self, action=None):
 
         self.text_edit.show()
@@ -2447,9 +2352,9 @@ class MainWindow(QMainWindow):
         self.label_name_current.show()
         self.button_smiley.show()
 
-        if self.show_smiley == 1:
+        if self.show_emoji == 1:
             self.widget_button.show()
-        # self.show_smiley = 2
+        # self.show_emoji = 2
 
         self.champ_private_key.hide()
         self.champ_public_key.hide()
@@ -2471,8 +2376,7 @@ class MainWindow(QMainWindow):
         self.label_name_contact.hide()
         self.champ_name_contact.hide()
         self.button_copy.hide()
-        self.button_delete_contact.hide()
-        self.button_modify_contact.hide()
+
 
         self.center_widget.setContentsMargins(0, 0, 0, 0)
 
@@ -2510,10 +2414,8 @@ class MainWindow(QMainWindow):
         self.label_contacts.show()
         self.list_contacts.show()
         self.button_add_contact.show()
-        self.button_delete_contact.show()
-        self.button_modify_contact.show()
 
-        self.center_widget.setContentsMargins(5, 5, 5, 5)
+        self.center_widget.setContentsMargins(0, 0, 0, 0)
 
         self.layout_private_key.setContentsMargins(0, 0, 0, 0)
         self.layout_name.setContentsMargins(0, 0, 0, 0)
@@ -2573,8 +2475,6 @@ class MainWindow(QMainWindow):
         self.button_smiley.hide()
         self.label_nom.hide()
         self.label_name_current.hide()
-        self.button_delete_contact.hide()
-        self.button_modify_contact.hide()
 
         self.champ_private_key.show()
         self.champ_public_key.show()

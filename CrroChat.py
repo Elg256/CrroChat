@@ -52,8 +52,8 @@ from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QPu
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QColor, QTextCursor
 
-from cryptcrro.asymetric import crro
-from cryptcrro.symetric import crro as scrro
+from cryptcrro.asymmetric import crro
+from cryptcrro.symmetric import crro as scrro
 import re
 import hashlib
 import base64
@@ -2501,3 +2501,4 @@ if __name__ == '__main__':
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
+
